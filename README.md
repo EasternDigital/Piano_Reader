@@ -1,4 +1,4 @@
-# Sight Reading · 识谱练习
+# Piano-NoteReader 识谱练习
 
 A small desktop app for practising note reading on the grand staff.
 Left hand reads the bass clef, right hand the treble clef, accidentals included.
