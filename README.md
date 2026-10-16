@@ -13,27 +13,18 @@ Import your own MIDI files and practise them. English / 中文.
 
 ## What it does / 功能
 
-- **Random drills** — a note appears, you play it on the on-screen keyboard. Judged the
-  instant you press, not when you release, so there is no lag.
-  **随机出题** —— 出一个音，在屏幕钢琴上按出来。按下去那一刻就判对错，不等松手，没有延迟感。
-
-- **Realistic ranges** — notes are weighted the way they actually appear in sheet music:
+- **Realistic ranges** : notes are weighted the way they actually appear in sheet music:
   common near middle C, rarer as the ledger lines pile up. Right hand E3–C7, left hand A0–A4.
-  **实战音域** —— 按真实乐谱的疏密加权出题，越靠近中央 C 越常出现，加线越多越少见。
+  **实战音域**  按真实乐谱的疏密加权出题，越靠近中央 C 越常出现，加线越多越少见。
   右手 E3–C7，左手 A0–A4。
 
-- **One octave at a time** — drill a single octave's seven notes until they stick.
-  **专项训练** —— 一次只练一个八度组的七个音。
+- **One octave at a time** : drill a single octave's seven notes until they stick.
+  **专项训练**  一次只练一个八度组的七个音。
 
-- **Play from a score** — drop a `.mid` into the window and it is converted and kept in
+- **Play from a score** : drop a `.mid` into the window and it is converted and kept in
   your library. Chords are played bottom to top, one note at a time.
-  **照着琴谱练** —— 把 `.mid` 拖进窗口就自动转成谱子存进库里。和弦从下往上一个一个弹。
+  **照着琴谱练**  把 `.mid` 拖进窗口就自动转成谱子存进库里。和弦从下往上一个一个弹。
 
-- **Sound** — each key you press sounds. Synthesised, no sample files.
-  **声音** —— 按键发声，纯合成，不带采样文件。
-
-- **Note chart** — the whole 88-key keyboard lined up against the grand staff.
-  **音符对照表** —— 整台 88 键钢琴对着大谱表。
 
 Statistics are deliberately minimal: a lifetime count of correct answers per hand, and a
 play count per piece per hand. No accuracy percentages, no charts, no timers.
@@ -129,7 +120,7 @@ renderer/index.html    整个界面（HTML + CSS + JS）
 renderer/i18n.js       中英文文案表
 renderer/midi.js       MIDI 解析与转谱子
 renderer/fonts/        Bravura（制谱字体）、Silkscreen（像素字体）
-samples/zh|en/         内置示例谱子，首次运行按语言复制一份过去
+samples/cn|en/         内置示例谱子，首次运行按语言复制一份过去
 build/icon.ico         程序图标
 ```
 
@@ -193,8 +184,8 @@ These are all mistakes that were made and fixed once already.
 
 ## Fonts / 字体
 
-- **Bravura** — SIL Open Font License 1.1, Steinberg Media Technologies.
-- **Silkscreen** — SIL Open Font License 1.1, Jason Kottke.
+- **Bravura** - SIL Open Font License 1.1, Steinberg Media Technologies.
+- **Silkscreen** - SIL Open Font License 1.1, Jason Kottke.
 
 Licence texts are in `renderer/fonts/`. 授权原文在 `renderer/fonts/` 里。
 
