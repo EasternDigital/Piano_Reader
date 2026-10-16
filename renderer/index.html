@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>识谱练习</title>
+<style>
+/* Bravura：Steinberg 的 SMuFL 标准制谱字体（SIL OFL），谱号与升降记号全靠它
+   Silkscreen：像素字体（SIL OFL），只用于英文与数字，汉字仍走系统字体 */
+@font-face{font-family:Bravura;src:url("fonts/Bravura.woff") format("woff");font-display:block}
+@font-face{font-family:Pixel;src:url("fonts/silkscreen.woff2") format("woff2");font-display:swap}
+
+:root{
+  --bg:#f4f5f7; --card:#ffffff; --ink:#14161a; --muted:#6b7280; --line:#e3e5ea;
+  --accent:#e8503a; --accent-soft:#fdecea;
+  --blue:#1f7ae0;
+  --ok:#17a05f; --ok-soft:#e5f6ed;
+  --bad:#d8352a; --bad-soft:#fdecea;
+  --key:#ffffff; --key-ink:#14161a; --key-black:#24262c; --key-black-ink:#f2f3f5;
+  --shadow:0 1px 2px rgba(16,18,22,.06),0 8px 24px rgba(16,18,22,.07);
+  --radius:14px;
+  /* 对照表里七个音名各自的颜色 */
+  --n-c:#e0392b; --n-d:#d97706; --n-e:#a16207; --n-f:#15803d;
+  --n-g:#0d7c86; --n-a:#2563eb; --n-b:#7c3aed;
+}
+
+*{box-sizing:border-box}
+html,body{height:100%}
+body{
+  margin:0; background:var(--bg); color:var(--ink);
+  font-family:"PingFang SC","Microsoft YaHei","Segoe UI",system-ui,-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased;
+  display:flex; flex-direction:column; align-items:center;
+  padding:12px; gap:10px;
+}
+.wrap{width:100%; max-width:640px; display:flex; flex-direction:column; gap:10px; flex:1}
+
+.topbar{display:flex; align-items:center; gap:10px; min-height:34px}
+.topbar h1{font-size:17px; margin:0; font-weight:650; letter-spacing:.02em}
+.spacer{flex:1}
+.iconbtn{
+  border:1px solid var(--line); background:var(--card); color:var(--muted);
+  border-radius:9px; padding:6px 11px; font-size:13px; cursor:pointer; line-height:1.3;
+  font-family:inherit;
+}
+.iconbtn:hover{color:var(--ink); border-color:var(--muted)}
+
+.card{background:var(--card); border-radius:var(--radius); box-shadow:var(--shadow); padding:16px}
+.card.tight{padding:13px}
+
+.hero{text-align:center; padding:15px 18px 13px}
+.hero .big{font-size:23px; font-weight:700; letter-spacing:.04em; margin:0 0 4px}
+.hero .sub{color:var(--muted); font-size:13px; margin:0; line-height:1.6}
+
+.group{margin-bottom:13px}
+.group:last-child{margin-bottom:0}
+.label{font-size:11.5px; letter-spacing:.14em; color:var(--muted); font-weight:600; margin:0 0 8px; text-transform:uppercase}
+.seg{display:grid; gap:8px}
+.seg.c2{grid-template-columns:1fr 1fr}
+.seg.c3{grid-template-columns:repeat(3,1fr)}
+.opt{
+  border:1.5px solid var(--line); background:transparent; color:var(--ink);
+  border-radius:11px; padding:9px 8px; font-size:14px; cursor:pointer;
+  font-family:inherit; text-align:center; transition:.12s; line-height:1.35;
+}
+.opt small{display:block; font-size:11px; color:var(--muted); margin-top:3px}
+.opt:hover{border-color:var(--muted)}
+.opt[aria-pressed="true"]{border-color:var(--accent); background:var(--accent-soft); color:var(--accent); font-weight:600}
+.opt[aria-pressed="true"] small{color:var(--accent); opacity:.8}
+.hint{font-size:12px; color:var(--muted); margin:8px 2px 0; line-height:1.6; font-variant-numeric:tabular-nums}
+
+.primary{
+  width:100%; border:none; background:var(--accent); color:#fff; font-family:inherit;
+  font-size:17px; font-weight:650; padding:13px; border-radius:12px; cursor:pointer;
+  letter-spacing:.06em;
+}
+.primary:hover{filter:brightness(1.06)}
+.ghost{
+  border:1.5px solid var(--line); background:transparent; color:var(--ink); font-family:inherit;
+  font-size:14px; padding:11px; border-radius:11px; cursor:pointer; width:100%;
+}
+.ghost:hover{border-color:var(--muted)}
+.ghost:disabled{opacity:.4; cursor:default}
+.row{display:flex; gap:8px}
+
+.hud{display:grid; grid-template-columns:repeat(3,1fr); text-align:center; gap:8px}
+.hud .k{font-size:11px; color:var(--muted); letter-spacing:.1em; margin-bottom:2px}
+.hud .v{font-size:23px; font-weight:650; font-variant-numeric:tabular-nums; letter-spacing:.01em}
+
+/* ---------- 五线谱 ---------- */
+.stage{padding:10px 8px 6px; position:relative; overflow:hidden}
+.stage .clefname{
+  position:absolute; top:10px; left:14px; font-size:11.5px; color:var(--muted); letter-spacing:.08em;
+}
+.stage svg{display:block; width:100%; height:auto}
+/* 窗口矮的时候优先保证钢琴键盘露在外面：五线谱按剩余高度缩，不去挤作答区。
+   （对照表在 .refscroll 里，不受这条影响）*/
+#staffHost svg, #revStaff svg{ max-height:clamp(140px, calc(100vh - 430px), 320px); }
+.stage.ok{background:var(--ok-soft)}
+.stage.bad{background:var(--bad-soft)}
+/* 按下的那一帧符头就是最终颜色，不做任何过渡。
+   随机出题只有一个音，整体换色；琴谱一行好多音，只换当前那一个。 */
+.stage.ok  svg:not(.score) .nt{color:var(--ok)}
+.stage.bad svg:not(.score) .nt{color:var(--bad)}
+.stage svg .nt.hl{color:var(--accent)}
+/* 琴谱行：弹过的淡掉，当前的用强调色，后面的正常 —— 眼睛好往后看 */
+.stage svg.score .nt.done{opacity:.26}
+.stage svg.score .nt.cur{color:var(--accent)}
+.stage.ok  svg.score .nt.cur{color:var(--ok)}
+.stage.bad svg.score .nt.cur{color:var(--bad)}
+
+.verdict{
+  text-align:center; font-size:14px; min-height:21px; margin:0 0 2px; font-weight:600; letter-spacing:.02em;
+}
+.verdict.ok{color:var(--ok)}
+.verdict.bad{color:var(--bad)}
+.verdict.idle{color:var(--muted); font-weight:400}
+
+/* ---------- 作答面板 ---------- */
+.padtabs{display:flex; gap:6px; justify-content:center; margin-bottom:12px}
+.padtab{
+  border:none; background:transparent; color:var(--muted); font-family:inherit; font-size:13px;
+  padding:6px 16px; border-radius:8px; cursor:pointer;
+}
+.padtab[aria-pressed="true"]{background:var(--accent); color:#fff; font-weight:600}
+
+.notepad{display:flex; flex-direction:column; gap:8px}
+.noterow{display:grid; gap:7px; grid-template-columns:repeat(7,1fr)}
+.nbtn{
+  border:1px solid var(--line); background:var(--card); color:var(--ink); font-family:inherit;
+  border-radius:10px; padding:13px 2px; font-size:17px; font-weight:600; cursor:pointer;
+  box-shadow:0 1px 1px rgba(0,0,0,.05); line-height:1.15; user-select:none;
+}
+.nbtn small{display:block; font-size:10px; font-weight:400; color:var(--muted); margin-top:2px}
+.nbtn.black{background:var(--key-black); color:var(--key-black-ink); border-color:var(--key-black)}
+.nbtn.black small{color:rgba(255,255,255,.55)}
+.nbtn.gap{visibility:hidden; pointer-events:none}
+.nbtn:not(.hit-ok):not(.hit-bad):active{transform:translateY(1px)}
+.nbtn:disabled{opacity:.45; cursor:default}
+.notepad,.piano{touch-action:none}
+
+.piano{position:relative; height:clamp(112px, 20vh, 158px); user-select:none; margin:0 auto; max-width:540px}
+.pwhite{
+  position:absolute; top:0; bottom:0; background:var(--key); color:var(--key-ink);
+  border:1px solid #c6c9cf; border-radius:0 0 7px 7px; cursor:pointer;
+  display:flex; align-items:flex-end; justify-content:center; padding-bottom:9px;
+  font-size:14px; font-weight:600; font-family:inherit;
+}
+.pblack{
+  position:absolute; top:0; height:62%; background:var(--key-black);
+  border-radius:0 0 6px 6px; cursor:pointer; z-index:2; border:1px solid #000;
+}
+/* 已判过对错的键不再走按压灰，否则会压住对错色、松手才显出来 */
+.pwhite:not(.hit-ok):not(.hit-bad):active{background:#e6e8ec}
+.pblack:not(.hit-ok):not(.hit-bad):active{background:#3a3d44}
+.piano button:disabled{opacity:.5; cursor:default}
+
+/* 按住时的对错配色，与五线谱上的符头同步。父级作用域用于压过任何 :active 状态 */
+.notepad .nbtn.hit-ok,.piano .pwhite.hit-ok,.piano .pblack.hit-ok{
+  background:var(--ok); border-color:var(--ok); color:#fff;
+}
+.notepad .nbtn.hit-bad,.piano .pwhite.hit-bad,.piano .pblack.hit-bad{
+  background:var(--bad); border-color:var(--bad); color:#fff;
+}
+.notepad .nbtn.hit-ok small,.notepad .nbtn.hit-bad small{color:rgba(255,255,255,.75)}
+.notepad .nbtn.show-right,.piano .pwhite.show-right,.piano .pblack.show-right{
+  box-shadow:inset 0 0 0 3px var(--ok);
+}
+
+/* ---------- 统计 ---------- */
+.bigstat{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+.bigstat > div{
+  border:1.5px solid var(--line); border-radius:12px; padding:20px 12px; text-align:center;
+}
+.bigstat .n{font-size:40px; font-weight:700; font-variant-numeric:tabular-nums; color:var(--ok); line-height:1.1}
+.bigstat .t{font-size:12.5px; color:var(--muted); margin-top:6px}
+.srow{display:flex; justify-content:space-between; padding:11px 2px; border-bottom:1px solid var(--line); font-size:14px}
+.srow:last-child{border-bottom:none}
+.srow b{font-weight:650; font-variant-numeric:tabular-nums}
+
+/* ---------- 错题 ---------- */
+.rev{text-align:center}
+.rev .ans{font-size:15px; margin:10px 0 2px}
+.rev .ans b{font-size:20px}
+.rev .ct{color:var(--muted); font-size:12px; margin-top:10px}
+.navbtns{display:flex; gap:10px; margin-top:14px}
+.navbtns button{
+  flex:1; border:none; background:var(--blue); color:#fff; font-family:inherit; font-size:15px;
+  padding:13px; border-radius:11px; cursor:pointer; font-weight:600;
+}
+.navbtns button:disabled{opacity:.35; cursor:default}
+
+/* ---------- 对照表 ---------- */
+.refscroll{overflow-x:auto; overflow-y:hidden; -webkit-overflow-scrolling:touch}
+.refscroll svg{width:auto; max-width:none; height:auto}
+.refnote{color:var(--muted); font-size:13px; line-height:1.8; text-align:center; margin:0}
+.swatch{display:inline-block; width:9px; height:9px; border-radius:50%; background:var(--accent); vertical-align:middle}
+
+/* ---------- 琴谱 ---------- */
+.empty{color:var(--muted); font-size:13px; text-align:center; padding:20px 0; line-height:1.8}
+.srow2{
+  display:flex; align-items:center; gap:12px; width:100%; text-align:left;
+  border:1.5px solid var(--line); background:transparent; color:var(--ink); font-family:inherit;
+  border-radius:12px; padding:12px 14px; cursor:pointer; margin-bottom:8px;
+}
+.srow2:hover{border-color:var(--accent)}
+.srow2:last-child{margin-bottom:0}
+.srow2 .t{flex:1; min-width:0}
+.srow2 .n{font-size:15.5px; font-weight:650; margin-bottom:2px}
+.srow2 .d{font-size:12px; color:var(--muted); line-height:1.5}
+.srow2 .p{font-size:12px; color:var(--muted); text-align:right; white-space:nowrap}
+.srow2 .p b{display:block; font-size:19px; color:var(--ok); font-weight:700; font-variant-numeric:tabular-nums}
+.srow2.broken{border-color:var(--bad); cursor:default}
+.srow2.broken .n{color:var(--bad)}
+
+.proofline{margin-bottom:12px}
+.proofline .bars{
+  font-size:12.5px; color:var(--muted); line-height:1.9; margin:6px 2px 0;
+  font-variant-numeric:tabular-nums;
+}
+.proofline .bars b{color:var(--ink); font-weight:600}
+.proofline .bars i{color:var(--accent); font-style:normal; font-weight:700}
+
+.hidden{display:none !important}
+.foot{color:var(--muted); font-size:11.5px; text-align:center; padding-bottom:4px; line-height:1.7}
+kbd{
+  font-family:ui-monospace,Menlo,Consolas,monospace; font-size:11px; border:1px solid var(--line);
+  border-bottom-width:2px; border-radius:4px; padding:1px 5px; color:var(--muted);
+}
+
+/* ==================================================================
+   旧谱纸 · 像素风主题
+   覆盖在原有样式之后：直角、2px 粗描边、实心偏移投影、像素字（仅英数）。
+   只有浅色一套 —— 这是一张纸的样子，深色版没有意义，也没人切。
+   ================================================================== */
+:root{
+  --bg:#efe9dc; --card:#fffaf2; --ink:#241f17; --muted:#6f6454; --line:#cdc2ad;
+  --accent:#c77a11; --accent-soft:#f6e3c2;
+  --ok:#2f7d52; --ok-soft:#dff1e4; --bad:#c23b33; --bad-soft:#f8ddd9;
+  --key:#fffaf2; --key-ink:#241f17; --key-black:#241f17; --key-black-ink:#fffaf2;
+  --paper:#fffaf2; --paper-ink:#241f17; --hard:#d8c9ab; --shadow:none;
+}
+
+/* 英文与数字用像素字，汉字自动落回系统字体（Silkscreen 里没有汉字） */
+body{font-family:Pixel,"Microsoft YaHei","PingFang SC",system-ui,sans-serif}
+
+/* 全部直角 */
+.card,.opt,.ghost,.primary,.iconbtn,.nbtn,.pwhite,.pblack,.srow2,.padtab,
+.bigstat>div,.navbtns button,.stage{border-radius:0}
+
+.card{border:2px solid var(--line); box-shadow:4px 4px 0 var(--hard)}
+.opt{border-width:2px}
+.opt[aria-pressed="true"]{box-shadow:3px 3px 0 var(--hard)}
+.primary{border:2px solid var(--ink); box-shadow:4px 4px 0 var(--hard); color:#241f17}
+.ghost{border-width:2px; box-shadow:3px 3px 0 var(--line)}
+.iconbtn{border-width:2px}
+.nbtn,.pwhite{box-shadow:3px 3px 0 var(--hard)}
+.pblack{border:2px solid var(--key-black)}
+.padtab[aria-pressed="true"]{color:#241f17}
+.navbtns button{border:2px solid var(--ink); box-shadow:4px 4px 0 var(--hard)}
+.hud .v{letter-spacing:0}
+.label,.foot,.hint{letter-spacing:.1em}
+kbd{border-radius:0}
+
+/* ---- 谱面：永远是纸 ---- */
+.stage{
+  background:var(--paper); color:var(--paper-ink); border:2px solid var(--line);
+  /* 纸上用的一套固定颜色，不跟深浅主题走，否则深色值落在米黄纸上看不清 */
+  --accent:#b26a00; --accent-soft:#f6e3c2;
+  --n-c:#d8392b; --n-d:#c06a00; --n-e:#8d7200; --n-f:#1d7a3a;
+  --n-g:#0a7a86; --n-a:#2159c7; --n-b:#6b35c0;
+}
+.stage .clefname{color:#8a7c63}
+
+/* 「升降记号」标题行右边那个 音名写法 小开关 */
+.labelrow{display:flex; align-items:center; justify-content:space-between; gap:10px}
+.switch{display:inline-flex; border:2px solid var(--line); flex:none}
+/* 顶栏里的语言开关：两边都亮着，一眼看得出是可以点的，尺寸跟旁边的按钮对齐。
+   两格等宽 —— 「中文」短、「English」长，不拉平看着歪。用 1fr 让两格都
+   取较宽那格的宽度，以后换成别的语言名也不用改数字。 */
+.topbar .switch{display:inline-grid; grid-template-columns:1fr 1fr}
+.topbar .switch .sw{font-size:13px; padding:5px 10px; line-height:1.4}
+.topbar .switch .sw:not([aria-pressed="true"]):hover{color:var(--ink)}
+.sw{
+  border:none; background:transparent; color:var(--muted); font-family:inherit;
+  font-size:11px; letter-spacing:.04em; padding:4px 10px; cursor:pointer; line-height:1.4;
+}
+.sw[aria-pressed="true"]{background:var(--accent); color:#241f17; font-weight:700}
+
+/* 专项训练那一排 */
+#optGroup .opt{padding:8px 4px; font-size:13px}
+#optGroup .opt small{font-size:10px; margin-top:2px}
+.stage.ok{background:#d9efdf}
+.stage.bad{background:#f8dbd5}
+.stage.ok  svg:not(.score) .nt{color:#1d6b3f}
+.stage.bad svg:not(.score) .nt{color:#a52d23}
+.stage.ok  svg.score .nt.cur{color:#1d6b3f}
+.stage.bad svg.score .nt.cur{color:#a52d23}
+/* 「练琴谱」和错题翻页用的蓝色跟琥珀色打架，换成薄荷绿 */
+:root{ --blue:#a7e3c0 }
+.navbtns button{color:#10251a}
+
+/* ---------- 拖文件进来导入 ---------- */
+#dropMask{
+  position:fixed; inset:0; z-index:60; display:flex; align-items:center; justify-content:center;
+  background:rgba(12,10,16,.74); padding:20px;
+}
+#dropMask .box{
+  background:var(--card); color:var(--ink); border:3px dashed var(--accent);
+  padding:30px 40px; text-align:center; line-height:1.9; max-width:420px;
+}
+#dropMask .box b{display:block; font-size:21px; margin-bottom:8px; color:var(--accent)}
+#dropMask .box small{display:block; color:var(--muted); font-size:12px; margin-top:8px; line-height:1.8}
+.impmsg .ln{font-size:13px; line-height:1.85; padding:2px 0}
+.impmsg .ln.err{color:var(--bad)}
+.impmsg .ln.note{color:var(--muted); font-size:12px}
+.impmsg .ln b{font-weight:700; color:var(--accent)}
+.row.c3{display:grid; grid-template-columns:repeat(3,1fr)}
+.row.c3 .ghost{font-size:13px; padding:11px 4px}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <div class="topbar">
+    <h1 id="title">识谱练习</h1>
+    <span class="spacer"></span>
+    <button class="iconbtn" id="soundBtn" data-i18n-title="soundTip">🔊 声音</button>
+    <span class="switch" id="langSw" data-i18n-title="langTip"><button class="sw" data-v="zh">中文</button><button class="sw" data-v="en">English</button></span>
+    <button class="iconbtn hidden" id="backBtn" data-i18n="back">‹ 返回</button>
+  </div>
+
+  <!-- ================= 菜单 ================= -->
+  <section id="screen-menu">
+    <div class="card hero">
+      <p class="big" data-i18n="appTitle">识谱练习</p>
+      <p class="sub" data-i18n="heroSub">看谱按键 · 左手低音谱号 / 右手高音谱号 · 含升降记号</p>
+    </div>
+
+    <div class="card" style="margin-top:14px">
+      <div class="group">
+        <p class="label" data-i18n="labHand">练习范围</p>
+        <div class="seg c2" id="optHand">
+          <button class="opt" data-v="treble"><span data-i18n="handRight">右手</span><small><span data-i18n="clefTrebleShort">高音谱号</span> · <span id="rangeT">E3–C7</span></small></button>
+          <button class="opt" data-v="bass"><span data-i18n="handLeft">左手</span><small><span data-i18n="clefBassShort">低音谱号</span> · <span id="rangeB">A0–A4</span></small></button>
+        </div>
+      </div>
+
+
+      <div class="group">
+        <p class="label labelrow"><span data-i18n="labAcc">升降记号</span>
+          <span class="switch" id="optNaming">
+            <button class="sw" data-v="letter">C D E</button><button class="sw" data-v="solfege">Do Re</button>
+          </span>
+        </p>
+        <div class="seg c3" id="optAcc">
+          <button class="opt" data-v="off"><span data-i18n="accOff">不含</span><small data-i18n="accOffSub">只有白键</small></button>
+          <button class="opt" data-v="some"><span data-i18n="accSome">少量</span><small data-i18n="accSomeSub">约 1/3 带记号</small></button>
+          <button class="opt" data-v="many"><span data-i18n="accMany">较多</span><small data-i18n="accManySub">约 2/3 带记号</small></button>
+        </div>
+      </div>
+      <div class="group">
+        <p class="label labelrow"><span data-i18n="labRange">出题音域</span>
+          <span class="switch" id="optGroupMode">
+            <button class="sw" data-v="all" data-i18n="rangeFull">全音域</button><button class="sw" data-v="pick" data-i18n="rangePick">专项</button>
+          </span>
+        </p>
+        <div class="seg c3 hidden" id="optGroup"></div>
+        <p class="hint" id="groupHint"></p>
+      </div>
+
+      <button class="primary" id="startBtn" style="margin-top:4px" data-i18n="start">开 始 练 习</button>
+    </div>
+
+    <button class="primary hidden" id="toScores" style="margin-top:8px;background:var(--blue)">🎼 练 琴 谱</button>
+    <div class="row" style="margin-top:8px">
+      <button class="ghost" id="toStats" data-i18n="toStats">📊 累计答对</button>
+      <button class="ghost" id="toRef" data-i18n="toRef">📖 音符对照表</button>
+    </div>
+    <p class="foot" style="margin-top:8px" id="footNote" data-i18n="footBrowser">不限时，练到按「结束」为止 · <kbd>空格</kbd> 开始<br>成绩保存在本机浏览器中</p>
+  </section>
+
+  <!-- ================= 练习 ================= -->
+  <section id="screen-play" class="hidden">
+    <div class="card tight">
+      <div class="hud">
+        <div><div class="k" id="hudTimeK" data-i18n="hudTime">时间</div><div class="v" id="hudTime">00:00</div></div>
+        <div><div class="k" id="hudScoreK" data-i18n="hudCorrect">本次答对</div><div class="v" id="hudScore" style="color:var(--ok)">0</div></div>
+        <div><div class="k" id="hudTotalK" data-i18n="hudTotal">累计答对</div><div class="v" id="hudTotal">0</div></div>
+      </div>
+    </div>
+
+    <div class="card stage" id="stage" style="margin-top:10px">
+      <span class="clefname" id="clefName"></span>
+      <div id="staffHost"></div>
+    </div>
+    <p class="verdict idle" id="verdict" data-i18n="askNote">这个音是什么？</p>
+
+    <div class="card tight">
+      <div class="padtabs">
+        <button class="padtab" id="tabPiano" data-v="piano" data-i18n="padPiano">钢琴键</button>
+        <button class="padtab" id="tabNotes" data-v="notes" data-i18n="padNames">音名</button>
+      </div>
+      <div id="padPiano" class="piano"></div>
+      <div id="padNotes" class="notepad hidden"></div>
+    </div>
+
+    <button class="ghost" id="stopBtn" style="margin-top:8px" data-i18n="stopSession">结束本次练习</button>
+  </section>
+
+  <!-- ================= 结果 ================= -->
+  <section id="screen-result" class="hidden">
+    <div class="card hero">
+      <p class="sub" style="letter-spacing:.14em;margin-bottom:10px" id="rsLabel" data-i18n="correctThis">本次答对</p>
+      <p class="big" id="rsScore" style="font-size:46px;color:var(--ok);margin:0">0</p>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <div id="rsRows"></div>
+    </div>
+    <div class="row" style="margin-top:12px">
+      <button class="ghost" id="rsAgain" data-i18n="again">再来一次</button>
+      <button class="ghost" id="rsReview" data-i18n="reviewBtn">查看错题</button>
+    </div>
+    <button class="ghost" id="rsMenu" style="margin-top:8px" data-i18n="backMenu">返回主菜单</button>
+  </section>
+
+  <!-- ================= 错题 ================= -->
+  <section id="screen-review" class="hidden">
+    <div class="card stage">
+      <span class="clefname" id="revClef"></span>
+      <div id="revStaff"></div>
+    </div>
+    <div class="card rev" style="margin-top:12px">
+      <p class="ans"><span data-i18n="answerIs">正确答案是</span> <b style="color:var(--ok)" id="revRight">—</b></p>
+      <p class="ans"><span data-i18n="youPlayed">你按的是</span> <b style="color:var(--bad)" id="revWrong">—</b></p>
+      <p class="ct" id="revCount"></p>
+      <div class="navbtns">
+        <button id="revPrev" data-i18n="prev">上一题</button>
+        <button id="revNext" data-i18n="next">下一题</button>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= 琴谱列表 ================= -->
+  <section id="screen-scores" class="hidden">
+    <div class="card impmsg hidden" id="importMsg"></div>
+    <div class="card">
+      <div id="scoreList"></div>
+    </div>
+    <div class="row c3" style="margin-top:8px">
+      <button class="ghost" id="scImport" data-i18n="importMidi">🎹 导入 MIDI</button>
+      <button class="ghost" id="scOpenFolder" data-i18n="scoresFolder">📁 谱子文件夹</button>
+      <button class="ghost" id="scRefresh" data-i18n="rescan">🔄 重新扫描</button>
+    </div>
+    <p class="foot" style="margin-top:8px" data-i18n="scoresFoot"></p>
+    <input type="file" id="scFile" accept=".mid,.midi,.json" multiple class="hidden">
+  </section>
+
+  <!-- ================= 校对 ================= -->
+  <section id="screen-proof" class="hidden">
+    <div class="card">
+      <p class="hint" style="margin:0 0 4px" data-i18n="proofHint"></p>
+    </div>
+    <div id="proofBody"></div>
+    <button class="primary" id="proofStart" style="margin-top:10px" data-i18n="proofStart">对过了，开始练</button>
+  </section>
+
+  <!-- ================= 累计答对 ================= -->
+  <section id="screen-stats" class="hidden">
+    <div class="card">
+      <div class="bigstat">
+        <div><div class="n" id="stTreble">0</div><div class="t" data-i18n="statTreble">右手 · 高音谱号</div></div>
+        <div><div class="n" id="stBass">0</div><div class="t" data-i18n="statBass">左手 · 低音谱号</div></div>
+      </div>
+      <p class="hint" style="text-align:center" data-i18n="statsHint"></p>
+    </div>
+    <button class="ghost" id="resetStats" style="margin-top:12px;color:var(--bad);border-color:var(--bad)" data-i18n="resetBtn">清空累计答对</button>
+  </section>
+
+  <!-- ================= 对照表 ================= -->
+  <section id="screen-ref" class="hidden">
+    <div class="card stage">
+      <span class="clefname" data-i18n="chartHeader"></span>
+      <div class="refscroll" id="refChart" style="margin-top:22px"></div>
+    </div>
+    <div class="card" style="margin-top:12px">
+      <p class="refnote" data-i18n="refNote"></p>
+    </div>
+  </section>
+
+</div>
+
+<div id="dropMask" class="hidden">
+  <div class="box">
+    <b data-i18n="dropTitle"></b>
+    <span data-i18n="dropLine"></span>
+    <small data-i18n="dropSmall"></small>
+  </div>
+</div>
+
+<script src="i18n.js"></script>
+<script src="midi.js"></script>
+<script>
+"use strict";
+
+/* ===================== 存储 =====================
+   桌面版：数据在「文档\识谱练习\data\*.json」，由 preload 在页面脚本之前
+   同步读好挂在 window.srHost 上，所以这里照样是同步取值。
+   直接用浏览器打开这个 html 时退回 localStorage，功能不受影响。        */
+const HOST = (typeof window !== "undefined" && window.srHost) ? window.srHost : null;
+
+const Store = HOST ? {
+  // contextBridge 送过来的对象是冻结的，必须拷贝一份才能往里写
+  get(kind, d){
+    const v = HOST.initial[kind];
+    if(v === undefined || v === null) return d;
+    try { return JSON.parse(JSON.stringify(v)); } catch(e){ return d; }
+  },
+  set(kind, v){ HOST.save(kind, v); }
+} : (() => {
+  let ok = true;
+  try { localStorage.setItem("__t","1"); localStorage.removeItem("__t"); } catch(e){ ok = false; }
+  const mem = {};
+  const K = kind => "sightread." + kind + ".v1";
+  return {
+    get(kind, d){ try{ const v = ok ? localStorage.getItem(K(kind)) : mem[kind]; return v ? JSON.parse(v) : d; }catch(e){ return d; } },
+    set(kind, v){ try{ const s = JSON.stringify(v); if(ok) localStorage.setItem(K(kind), s); else mem[kind] = s; }catch(e){} }
+  };
+})();
+
+const defaults = { hand:"treble", acc:"some", groupMode:"all", group:"4", naming:"solfege",
+                   input:"piano", sound:true, lang:null };
+let settings = Object.assign({}, defaults, Store.get("settings", {}));
+settings.sound = settings.sound !== false;
+delete settings.theme;                                    // 1.10 起只有浅色一套，主题开关取消
+if(settings.lang !== "zh" && settings.lang !== "en")      // 头一回按系统语言猜，之后记住你选的
+  settings.lang = /^zh\b/i.test(navigator.language || "") ? "zh" : "en";
+
+/* 所有界面文案都在 i18n.js 里。带参数的键存的是函数，一律通过 T() 取。 */
+const STR = window.I18N;
+function T(k){
+  const v = (STR[settings.lang] || STR.zh)[k];
+  return typeof v === "function" ? v.apply(null, [].slice.call(arguments, 1)) : v;
+}
+window.T = T;                                             // midi.js 报错时也要用
+if(settings.hand !== "treble" && settings.hand !== "bass") settings.hand = "treble";   // 旧的「双手」已取消
+delete settings.range;                                                                // 音域选项已取消，只剩实战模式
+if(settings.group === "all"){ settings.group = "4"; settings.groupMode = "all"; }   // 1.6 的旧写法
+if(!settings.solfegeDefault){          // 1.3.0 起统一用 Do Re Mi；老存档里的字母写法切过来一次，之后随你改
+  settings.naming = "solfege";
+  settings.solfegeDefault = true;
+}
+function saveSettings(){ Store.set("settings", settings); }
+saveSettings();
+
+/* 统计只留一件事：左右手各自累计答对了多少次 */
+function loadStats(){
+  const raw = Store.get("stats", null);
+  if(raw && raw.correct) return { correct:{ treble:raw.correct.treble|0, bass:raw.correct.bass|0 } };
+  // 从旧版本迁移，保住已经练出来的答对数
+  if(raw && raw.byClef)
+    return { correct:{ treble:(raw.byClef.treble && raw.byClef.treble.ok)|0,
+                       bass:(raw.byClef.bass && raw.byClef.bass.ok)|0 } };
+  return { correct:{ treble:0, bass:0 } };
+}
+let stats = loadStats();
+function saveStats(){ Store.set("stats", stats); }
+
+/* ===================== 乐理 ===================== */
+const LETTERS = ["C","D","E","F","G","A","B"];
+let SOLFEGE = T("solfege");          // 英文的第七音是 Ti，中文是 Si，切语言时换掉
+const PC      = [0,2,4,5,7,9,11];
+// step = 八度 * 7 + 音名序号，C4 = 中央 C = 28
+const stepLetter = s => ((s % 7) + 7) % 7;
+const stepPc = (s, acc) => (((PC[stepLetter(s)] + acc) % 12) + 12) % 12;
+// 带组号的音名，跟着「音名写法」走：Do4 / C4
+const sciName  = s => (settings.naming === "solfege" ? SOLFEGE : LETTERS)[stepLetter(s)] + Math.floor(s/7);
+
+function nameOf(step, acc){
+  const base = (settings.naming === "solfege" ? SOLFEGE : LETTERS)[stepLetter(step)];
+  return base + (acc > 0 ? "♯" : acc < 0 ? "♭" : "");
+}
+const SHARP_PC = { 1:[0,1], 3:[1,1], 6:[3,1], 8:[4,1], 10:[5,1] };  // pc -> [音名序号, 变音]
+const FLAT_PC  = { 1:[1,-1], 3:[2,-1], 6:[4,-1], 8:[5,-1], 10:[6,-1] };
+function pcName(pc){
+  const set = settings.naming === "solfege" ? SOLFEGE : LETTERS;
+  const nat = PC.indexOf(pc);
+  if(nat >= 0) return set[nat];
+  return set[SHARP_PC[pc][0]] + "♯ / " + set[FLAT_PC[pc][0]] + "♭";
+}
+
+const CLEF_BOTTOM = { treble:30, bass:18 };  // 最下面一条线的 step（E4 / G2）
+const clefLabel = c => T(c === "treble" ? "clefTreble" : "clefBass");
+
+// step + 变音 -> MIDI 音高号。中央 C（step 28）= 60，A0（step 5）= 21
+const midiOf = (step, acc) => (Math.floor(step/7) + 1) * 12 + PC[stepLetter(step)] + (acc || 0);
+// 作答面板只给出半音（pc），发声要补一个八度：取离谱上那个音最近的同名音。
+// 按对了，响的就正好是谱面上那个音高。
+function nearMidi(pc, ref){
+  let m = pc + 12 * Math.round((ref - pc) / 12);
+  while(m < 21)  m += 12;
+  while(m > 108) m -= 12;
+  return m;
+}
+
+/* ===================== 声音 =====================
+   一个音一个声，不搞复杂的：几条谐波叠起来，音头一下子起、然后一路衰减，
+   同时把低通滤波往下扫 —— 高次谐波先没，听起来就有点钢琴味儿了。
+   纯合成，不带采样文件，程序不变大，按下去也没有加载延迟。        */
+const Sound = (() => {
+  const PARTIALS = [[1, 1], [2, .40], [3, .18], [4, .09], [5, .045], [6, .02]];
+  let ctx = null, master = null, bad = false;
+
+  function ready(){
+    if(ctx || bad) return ctx;
+    try {
+      const AC = window.AudioContext || window.webkitAudioContext;
+      if(!AC){ bad = true; return null; }
+      ctx = new AC();
+      master = ctx.createGain();
+      master.gain.value = .22;            // 留足余量，和弦连着按也不会削顶
+      master.connect(ctx.destination);
+    } catch(e){ bad = true; ctx = null; }
+    return ctx;
+  }
+
+  function play(midi){
+    if(!settings.sound || !(midi >= 12 && midi <= 120)) return;
+    const c = ready(); if(!c) return;
+    if(c.state === "suspended") c.resume();
+
+    const f0 = 440 * Math.pow(2, (midi - 69) / 12);
+    const t  = c.currentTime;
+    const dur = Math.max(.5, Math.min(2.8, 2.8 - (midi - 21) * .024));   // 低音拖得久，高音一下就没
+
+    const bus = c.createGain();
+    bus.gain.setValueAtTime(0.0001, t);
+    bus.gain.exponentialRampToValueAtTime(1, t + .006);                  // 音头
+    bus.gain.exponentialRampToValueAtTime(.0008, t + dur);               // 衰减
+
+    const lp = c.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(Math.min(14000, f0 * 10), t);
+    lp.frequency.exponentialRampToValueAtTime(Math.max(500, f0 * 2), t + dur);
+
+    lp.connect(bus); bus.connect(master);
+
+    const nodes = [bus, lp];
+    PARTIALS.forEach(pr => {
+      if(f0 * pr[0] > 16000) return;
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = "sine";
+      o.frequency.value = f0 * pr[0];
+      g.gain.value = pr[1];
+      o.connect(g); g.connect(lp);
+      o.start(t); o.stop(t + dur + .05);
+      o.onended = () => { try { g.disconnect(); } catch(e){} };
+      nodes.push(o, g);
+    });
+    setTimeout(() => nodes.forEach(n => { try { n.disconnect(); } catch(e){} }), (dur + .3) * 1000);
+  }
+
+  return { play };
+})();
+
+function applySound(){
+  $("soundBtn").textContent = settings.sound ? T("soundOn") : T("soundOff");
+  $("soundBtn").style.opacity = settings.sound ? "" : ".55";
+}
+
+/* ---- 实战音域 ----
+   真实乐谱里加线超过 3～4 条就改用换谱号或 8va，所以：
+   内侧（中央 C 方向）一律卡在 3 条加线，外侧放开到键盘边界。
+   右手 上 5 条 → C7（第 5 条上加线上方的那个间），下 3 条 → E3
+   左手 下 6 条 → A0（钢琴最左端），      上 3 条 → A4          */
+const REAL_RANGE = { treble:[23, 49], bass:[5, 33] };
+const PIANO_LO = 5, PIANO_HI = 56;        // 整台钢琴：A0 – C8，专项训练用
+
+/* 出题权重按加线条数衰减：加线越多的音在真实乐谱里越少见。
+   高音谱表往上比低音谱表往下更能容忍加线（往下会直接换低音谱号，
+   往上则要拖一道 8va 括号，所以排版上会多忍一两条），因此衰减更慢。*/
+const LEDGER_W = {
+  treble:[1, 1, .8, .6, .55, .45],
+  bass:  [1, 1, .8, .6, .4, .3, .25]
+};
+
+function ledgerCount(clef, s){
+  const bs = CLEF_BOTTOM[clef];
+  if(s > bs + 8) return Math.floor((s - bs - 8) / 2);   // 顶线以上
+  if(s < bs)     return Math.floor((bs - s) / 2);       // 底线以下
+  return 0;
+}
+
+// 每个谱号预先算好累积权重表
+const PICK = {};
+["treble","bass"].forEach(clef => {
+  const [lo, hi] = REAL_RANGE[clef], w = LEDGER_W[clef];
+  const steps = [], cum = []; let sum = 0;
+  for(let s = lo; s <= hi; s++){
+    sum += w[Math.min(ledgerCount(clef, s), w.length - 1)];
+    steps.push(s); cum.push(sum);
+  }
+  PICK[clef] = { steps, cum, sum };
+});
+function pickStep(clef){
+  const g = groupRange();
+  if(g) return g[0] + randInt(g[1] - g[0] + 1);     // 专项：组内平均抽，7 个音一样多
+  const t = PICK[clef], r = Math.random() * t.sum;
+  let i = 0;
+  while(i < t.cum.length - 1 && t.cum[i] <= r) i++;
+  return t.steps[i];
+}
+
+/* ---- 专项训练：按八度组练，一次只练 7 个音 ----
+   组号就是科学音高里的那个数字：4 = Do4–Si4（小字一组）。
+   组的两端会被实战音域裁掉，所以首尾两组可能不足 7 个音。      */
+/* 专项也只在这只手的实战音域里分组 —— 左手跑到右手音域那种谱面现实中不存在，不练。
+   所以组的两端会被实战音域裁掉，首尾两组可能不足 7 个音。          */
+function groupSpan(clef, oct){
+  const [lo, hi] = REAL_RANGE[clef];
+  const a = Math.max(lo, oct * 7), b = Math.min(hi, oct * 7 + 6);
+  return b >= a ? [a, b] : null;
+}
+// 只剩 1 个音的组没有单练的意义，跳过（那个音在「全音域」里照样会出）
+function groupsFor(clef){
+  const out = [];
+  for(let oct = 0; oct <= 8; oct++){
+    const s = groupSpan(clef, oct);
+    if(s && s[1] - s[0] + 1 >= 2) out.push({ oct, span:s });
+  }
+  return out;
+}
+// 当前生效的专项范围；开关在「全音域」时返回 null，走原来的加权算法
+function groupRange(){
+  if(settings.groupMode !== "pick") return null;
+  return groupSpan(settings.hand, +settings.group);
+}
+// 实际出题用的音域：专项优先，否则整个实战音域
+function activeRange(clef){ return groupRange() || REAL_RANGE[clef]; }
+
+// 避免 B♯ / E♯ / C♭ / F♭ 这类别扭写法
+function allowedAcc(step){
+  const L = stepLetter(step);
+  const out = [0];
+  if(L !== 2 && L !== 6) out.push(1);   // 不给 E、B 加升号
+  if(L !== 0 && L !== 3) out.push(-1);  // 不给 C、F 加降号
+  return out;
+}
+
+/* ===================== 五线谱绘制 ===================== */
+const SP = 16, HS = 8;
+
+/* 乐谱符号一律用 Bravura（Steinberg 的 SMuFL 标准制谱字体，随程序打包）。
+   SMuFL 的规矩：字号 = 4 个「间」，字形自带正确的大小和基线位置，
+   所以不用再手工标定偏移 —— 以前用系统字体那套文本符号形状是错的。   */
+const MUSIC_FONT = "Bravura,serif";
+const MUSIC_FS   = SP * 4;                 // 64
+function C(n){ return String.fromCharCode(n); }
+const SMUFL = {                            // 写成码位，避免源码里出现不可见的私用区字符
+  gClef: C(0xE050), fClef: C(0xE062),      // 基线落在 G 线 / F 线上
+  sharp: C(0xE262), flat:  C(0xE260),      // 基线落在音符所在的线/间
+  whole: C(0xE0A2)                         // 全音符符头，基线为符头竖直中心
+};
+
+// 符头宽约 1.68 个间，升降记号要留在它左边
+const HEAD_HALF = SP * 0.84;
+const ACC_DX    = HEAD_HALF + SP * 0.22;
+
+const glyph = (ch, x, y, anchor, fs) =>
+  '<text x="'+x+'" y="'+y+'" text-anchor="'+(anchor||"middle")+'" font-family="'+MUSIC_FONT+
+  '" font-size="'+(fs || MUSIC_FS)+'" fill="currentColor">'+ch+'</text>';
+
+// 谱号：高音谱号基线压在 G4 线，低音谱号基线压在 F3 线
+const clefGlyph = (clef, yOf, x, fs) => clef === "treble"
+  ? glyph(SMUFL.gClef, x, yOf(32), "start", fs)
+  : glyph(SMUFL.fClef, x, yOf(24), "start", fs);
+
+const headGlyph = (x, y, scale) => glyph(SMUFL.whole, x, y, "middle", MUSIC_FS * (scale || 1));
+const accGlyph  = (acc, x, y, scale) =>
+  glyph(acc > 0 ? SMUFL.sharp : SMUFL.flat, x, y, "end", MUSIC_FS * (scale || 1));
+
+// 符头 + 升降记号，整组由调用方套 .nt 换色（单音用；和弦走 eventGlyphs）
+function noteGlyphs(x, y, acc, scale){
+  const s = headGlyph(x, y, scale);
+  return acc ? s + accGlyph(acc, x - ACC_DX * (scale || 1), y, scale) : s;
+}
+
+/* ---------- 和弦的排版 ----------
+   同时响的几个音叠在一根竖线上，有两件事必须按制谱规矩来，否则就糊成一团：
+     1. 相邻二度（含同音）的两个符头会重叠，上面那个要挪到右边一个符头的位置；
+     2. 几个升降记号也会叠在一起，要往左分成几列错开排。            */
+const ACC_W     = SP * 1.15;   // 升降记号一列占的宽度
+const ACC_CLEAR = 6;           // 同一列里两个记号至少隔开 6 个音级（约一个六度）才不打架
+
+function chordLayout(notes){            // notes 必须是从低到高排好的
+  const lay = [];
+  let prev = -999, prevOff = false;
+  notes.forEach(n => {
+    const off = (n.step - prev <= 1) && !prevOff;   // 连着三个二度时只挪中间那个
+    lay.push({ n, off, accCol:0 });
+    prev = n.step; prevOff = off;
+  });
+  // 升降记号从上往下安排，每个放进第一个挤得开的列
+  const cols = [];
+  for(let i = lay.length - 1; i >= 0; i--){
+    if(!lay[i].n.acc) continue;
+    let c = 0;
+    while(cols[c] && cols[c].some(s => Math.abs(s - lay[i].n.step) < ACC_CLEAR)) c++;
+    (cols[c] || (cols[c] = [])).push(lay[i].n.step);
+    lay[i].accCol = c;
+  }
+  lay.accCols = cols.length;
+  lay.hasOff  = lay.some(it => it.off);
+  return lay;
+}
+
+/* 这个事件横向要占多宽（scale = 1 时的像素）。
+   单音沿用老的 34，保持原来那个疏密；和弦才按实际需要加宽。 */
+function eventWidth(lay){
+  if(lay.length === 1) return 34;
+  return HEAD_HALF * 2 + (lay.hasOff ? HEAD_HALF * 2 : 0) + lay.accCols * ACC_W + SP;
+}
+
+/* 画一个事件（单音或和弦）：加线 + 符头 + 升降记号。
+   clsOf(i) 给从低到高第 i 个音返回附加类名，用来标「弹过了 / 该弹这个」。 */
+function eventGlyphs(p, notes, x, yOf, bs, lw, scale, clsOf){
+  const lay = chordLayout(notes);
+  const headW = HEAD_HALF * 2 * scale;
+  const lo = notes[0].step, hi = notes[notes.length - 1].step;
+  // 有符头被挪到右边时整个和弦占两列，往左挪半个符头让它还是落在格子正中
+  const bx = x - (lay.hasOff ? headW / 2 : 0);
+
+  // 加线整个和弦一起算；挪到右边去的符头要把加线也拉长过去
+  const ledger = k => {
+    const ext = lay.some(it => it.off && Math.abs(it.n.step - k) <= 1) ? headW : 0;
+    p.push('<line x1="'+(bx - lw)+'" y1="'+yOf(k)+'" x2="'+(bx + lw + ext)+'" y2="'+yOf(k)+
+           '" stroke="currentColor" stroke-width="1.8"/>');
+  };
+  if(hi > bs + 8) for(let k = bs + 10; k <= hi; k += 2) ledger(k);
+  if(lo < bs)     for(let k = bs - 2;  k >= lo; k -= 2) ledger(k);
+
+  lay.forEach((it, i) => {
+    const y = yOf(it.n.step);
+    let s = headGlyph(bx + (it.off ? headW : 0), y, scale);
+    if(it.n.acc) s += accGlyph(it.n.acc, bx - (ACC_DX + it.accCol * ACC_W) * scale, y, scale);
+    p.push('<g class="nt' + (clsOf ? clsOf(i) : "") + '">' + s + '</g>');
+  });
+}
+
+/* 画布按要显示的音域算：上下各留出足够的加线与升降记号空间。
+   最小边距同时要容得下谱号本身（高音谱号向下伸出约 1.9 个间） */
+function geomFor(clef, lo, hi){
+  const bs = CLEF_BOTTOM[clef];
+  const above = Math.max(0, hi - (bs + 8));
+  const below = Math.max(0, bs - lo);
+  const top    = 26 + above * HS;
+  const bottom = top + SP * 4;
+  return { top, height: bottom + Math.max(36, below * HS + 26) };
+}
+
+function staffSVG(clef, notes, opts){
+  opts = opts || {};
+  const w = opts.width || 560;
+  const top = opts.top, bottom = top + SP*4, h = opts.height;
+  const bs = CLEF_BOTTOM[clef];
+  const yOf = s => bottom - (s - bs) * HS;
+  const lw = opts.lw || 19;
+  const p = [];
+
+  p.push('<svg viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" role="img"'+
+         (opts.px ? ' style="width:'+Math.round(w*opts.px)+'px"' : '')+'>');
+
+  p.push('<g stroke="currentColor" stroke-width="1.6" stroke-linecap="square">');
+  for(let i=0;i<5;i++){ const y = top + i*SP; p.push('<line x1="16" y1="'+y+'" x2="'+(w-16)+'" y2="'+y+'"/>'); }
+  p.push('</g>');
+
+  p.push(clefGlyph(clef, yOf, 26));
+
+  const x0  = opts.x0 || (notes.length > 1 ? 120 : Math.round(w*0.56));
+  const gap = opts.gap || 0;
+
+  notes.forEach((n, i) => {
+    const x = x0 + i*gap;
+    const y = yOf(n.step);
+
+    // 加线（属于谱面，答题时不换色）
+    if(n.step > bs + 8)
+      for(let k = bs + 10; k <= n.step; k += 2)
+        p.push('<line x1="'+(x-lw)+'" y1="'+yOf(k)+'" x2="'+(x+lw)+'" y2="'+yOf(k)+'" stroke="currentColor" stroke-width="1.8"/>');
+    if(n.step < bs)
+      for(let k = bs - 2; k >= n.step; k -= 2)
+        p.push('<line x1="'+(x-lw)+'" y1="'+yOf(k)+'" x2="'+(x+lw)+'" y2="'+yOf(k)+'" stroke="currentColor" stroke-width="1.8"/>');
+
+    // 符头与升降记号：整组换色
+    p.push('<g class="nt'+(n.hl ? " hl" : "")+'">' + noteGlyphs(x, y, n.acc) + '</g>');
+
+    if(n.label)
+      p.push('<text x="'+x+'" y="'+opts.labelY+'" text-anchor="middle" font-size="16" font-weight="600" '+
+             'font-family="inherit" fill="'+(n.hl ? "var(--accent)" : "currentColor")+'">'+n.label+'</text>');
+  });
+
+  p.push('</svg>');
+  return p.join("");
+}
+
+/* ===================== 界面切换 ===================== */
+const $ = id => document.getElementById(id);
+const screens = { menu:$("screen-menu"), play:$("screen-play"), result:$("screen-result"),
+                  review:$("screen-review"), stats:$("screen-stats"), ref:$("screen-ref"),
+                  scores:$("screen-scores"), proof:$("screen-proof") };
+let screen = "menu";
+let mode = "drill";      // "drill" = 随机出题，"score" = 照着琴谱练
+let SC = null;           // 当前琴谱练习状态
+
+function go(name){
+  screen = name;
+  Object.keys(screens).forEach(k => screens[k].classList.toggle("hidden", k !== name));
+  $("title").textContent = (name === "play" && mode === "score" && SC)
+    ? SC.sc.title + " · " + handName(SC.sc.hand) : T("screenTitles")[name];
+  $("backBtn").classList.toggle("hidden", name === "menu" || name === "play");
+  window.scrollTo(0,0);
+}
+$("backBtn").onclick = () => {
+  if(screen === "review") return go("result");
+  if(screen === "proof") return go("scores");
+  if(screen === "result" && mode === "score") return openScores();
+  go("menu");
+};
+
+/* ---------- 中英切换 ----------
+   静态文案靠 data-i18n 填，动态的靠 repaint() 把当前这一屏重画一遍。  */
+function applyLang(){
+  document.documentElement.lang = T("htmlLang");
+  SOLFEGE = T("solfege");
+  document.querySelectorAll("[data-i18n]").forEach(el => { el.innerHTML = T(el.dataset.i18n); });
+  document.querySelectorAll("[data-i18n-title]").forEach(el => { el.title = T(el.dataset.i18nTitle); });
+  // 语言名永远写它自己那种语言，不翻译
+  [...$("langSw").children].forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.v === settings.lang)));
+  paintScoresBtn();
+  applySound();
+  buildPads();                       // 唱名换了，琴键和音名按钮上的字要重画
+  refreshRangeLabels();
+  buildGroupRow();
+  repaint();
+}
+
+function repaint(){
+  $("title").textContent = (screen === "play" && mode === "score" && SC)
+    ? SC.sc.title + " · " + handName(SC.sc.hand) : T("screenTitles")[screen];
+
+  if(screen === "play"){
+    if(mode === "score" && SC){ setScoreHud(); drawScore(); }
+    else if(S){
+      setDrillHud();
+      if(S.cur){
+        $("clefName").textContent = clefLabel(S.cur.clef);
+        $("staffHost").innerHTML = staffSVG(S.cur.clef, [{ step:S.cur.step, acc:S.cur.acc }], geom);
+      }
+      // 已经答过、正按着键的那一瞬间别把判定结果抹掉
+      if(!locked){ const v = $("verdict"); v.className = "verdict idle"; v.textContent = T("askNote"); }
+    }
+  }
+  else if(screen === "result" && repaintResult) repaintResult();
+  else if(screen === "review" && S && S.mistakes.length) drawReview();
+  else if(screen === "scores") refreshScoreList();
+  else if(screen === "proof" && pending) renderProof(pending);
+  else if(screen === "ref"){
+    const host = $("refChart"), keep = host.scrollLeft;
+    host.innerHTML = chartSVG().svg;
+    host.scrollLeft = keep;
+  }
+}
+
+$("langSw").addEventListener("click", e => {
+  const b = e.target.closest("[data-v]");
+  if(!b || b.dataset.v === settings.lang) return;
+  settings.lang = b.dataset.v;
+  saveSettings(); applyLang();
+});
+
+/* 「练琴谱」按钮上带着谱子数量，文字自己管，不走 data-i18n 那一遍 */
+let scoresBtn = { n:0, bad:0, scanned:false };
+function paintScoresBtn(){
+  const b = $("toScores");
+  if(!b) return;
+  b.textContent = !scoresBtn.scanned ? T("playPiece")
+                : scoresBtn.n ? T("playPieceN", scoresBtn.n, scoresBtn.bad)
+                : T("playPieceEmpty");
+}
+
+$("soundBtn").onclick = () => {
+  settings.sound = !settings.sound;
+  saveSettings(); applySound();
+  if(settings.sound) Sound.play(60);      // 开的时候响一下中央 C，知道确实开了
+};
+applySound();
+
+/* ===================== 菜单选项 ===================== */
+function bindSeg(hostId, key){
+  const host = $(hostId);
+  const paint = () => [...host.children].forEach(b => {
+    if(b.dataset.v !== undefined) b.setAttribute("aria-pressed", String(b.dataset.v === settings[key]));
+  });
+  host.addEventListener("click", e => {
+    const b = e.target.closest("[data-v]"); if(!b || b.disabled) return;
+    settings[key] = b.dataset.v; saveSettings(); paint();
+  });
+  paint();
+}
+bindSeg("optHand","hand");
+bindSeg("optAcc","acc");
+bindSeg("optNaming","naming");
+bindSeg("optGroup","group");
+bindSeg("optGroupMode","groupMode");
+
+/* 专项训练：整台钢琴 9 个八度组，开关打到「专项」才展开 */
+function buildGroupRow(){
+  const gs = groupsFor(settings.hand);
+  // 换手之后原来选的组可能不在这只手的音域里了，退到最接近的一组
+  if(!gs.some(g => String(g.oct) === settings.group)){
+    const want = +settings.group;
+    settings.group = String(gs.reduce((best, g) =>
+      Math.abs(g.oct - want) < Math.abs(best.oct - want) ? g : best, gs[0]).oct);
+    saveSettings();
+  }
+  const names = T("octaveNames");
+  $("optGroup").innerHTML = gs.map(g =>
+    '<button class="opt" data-v="'+g.oct+'">' + names[g.oct] +
+    '<small>' + T("groupSub", sciName(g.span[0]), sciName(g.span[1]), g.span[1]-g.span[0]+1) +
+    '</small></button>').join("");
+  [...$("optGroup").children].forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.v === settings.group)));
+  applyGroupMode();
+}
+function applyGroupMode(){
+  const pick = settings.groupMode === "pick";
+  $("optGroup").classList.toggle("hidden", !pick);
+  const g = groupRange();
+  if(pick && g){
+    $("groupHint").textContent = T("groupHintPick", sciName(g[0]), sciName(g[1]), g[1]-g[0]+1);
+  } else {
+    $("groupHint").textContent = T("groupHintAll",
+      sciName(REAL_RANGE[settings.hand][0]), sciName(REAL_RANGE[settings.hand][1]));
+  }
+}
+$("optGroup").addEventListener("click", applyGroupMode);
+$("optGroupMode").addEventListener("click", applyGroupMode);
+$("optHand").addEventListener("click", buildGroupRow);
+// 菜单上的音域说明跟着音名写法走
+function refreshRangeLabels(){
+  $("rangeT").textContent = sciName(REAL_RANGE.treble[0]) + "–" + sciName(REAL_RANGE.treble[1]);
+  $("rangeB").textContent = sciName(REAL_RANGE.bass[0])   + "–" + sciName(REAL_RANGE.bass[1]);
+}
+$("optNaming").addEventListener("click", () => { buildPads(); refreshRangeLabels(); buildGroupRow(); });
+refreshRangeLabels();
+buildGroupRow();
+
+/* ===================== 作答面板 ===================== */
+const WHITE_PC = [0,2,4,5,7,9,11];
+const BLACK = [ {pc:1,after:0}, {pc:3,after:1}, {pc:6,after:3}, {pc:8,after:4}, {pc:10,after:5} ];
+const KEY_PIANO  = { a:0, w:1, s:2, e:3, d:4, f:5, t:6, g:7, y:8, h:9, u:10, j:11 };
+const KEY_LETTER = { c:0, d:2, e:4, f:5, g:7, a:9, b:11 };
+
+function buildPads(){
+  const set = settings.naming === "solfege" ? SOLFEGE : LETTERS;
+
+  // —— 钢琴键：只标白键，黑键不标 ——
+  const piano = $("padPiano"); piano.innerHTML = "";
+  const ww = 100/7;
+  WHITE_PC.forEach((pc,i) => {
+    const b = document.createElement("button");
+    b.className = "pwhite"; b.dataset.pc = pc;
+    b.style.left = (i*ww)+"%"; b.style.width = ww+"%";
+    b.textContent = set[i];
+    piano.appendChild(b);
+  });
+  BLACK.forEach(k => {
+    const b = document.createElement("button");
+    b.className = "pblack"; b.dataset.pc = k.pc;
+    b.style.left = "calc("+((k.after+1)*ww)+"% - 17px)";
+    b.style.width = "34px";
+    b.setAttribute("aria-label", set[SHARP_PC[k.pc][0]] + "♯");
+    piano.appendChild(b);
+  });
+
+  // —— 音名按钮 ——
+  const pad = $("padNotes"); pad.innerHTML = "";
+  const top = document.createElement("div"); top.className = "noterow";
+  [1,3,null,6,8,10,null].forEach(pc => {
+    const b = document.createElement("button");
+    b.className = "nbtn" + (pc === null ? " gap" : " black");
+    if(pc === null) b.textContent = "·";
+    else {
+      b.innerHTML = set[SHARP_PC[pc][0]] + "♯<small>" + set[FLAT_PC[pc][0]] + "♭</small>";
+      b.dataset.pc = pc;
+    }
+    top.appendChild(b);
+  });
+  const bot = document.createElement("div"); bot.className = "noterow";
+  WHITE_PC.forEach((pc,i) => {
+    const b = document.createElement("button");
+    b.className = "nbtn"; b.dataset.pc = pc; b.textContent = set[i];
+    bot.appendChild(b);
+  });
+  pad.appendChild(top); pad.appendChild(bot);
+}
+buildPads();
+
+function setPad(kind){
+  settings.input = kind; saveSettings();
+  $("tabNotes").setAttribute("aria-pressed", String(kind==="notes"));
+  $("tabPiano").setAttribute("aria-pressed", String(kind==="piano"));
+  $("padNotes").classList.toggle("hidden", kind!=="notes");
+  $("padPiano").classList.toggle("hidden", kind!=="piano");
+}
+$("tabNotes").onclick = () => setPad("notes");
+$("tabPiano").onclick = () => setPad("piano");
+setPad(settings.input);
+
+// 按下（而不是松开）就判定
+function onPointerDown(e){
+  if(e.button !== undefined && e.button !== 0) return;
+  const b = e.target.closest("[data-pc]");
+  if(!b || b.disabled) return;
+  e.preventDefault();
+  press(Number(b.dataset.pc), b, "pointer");
+}
+$("padNotes").addEventListener("pointerdown", onPointerDown);
+$("padPiano").addEventListener("pointerdown", onPointerDown);
+window.addEventListener("pointerup",     () => release("pointer"));
+window.addEventListener("pointercancel", () => release("pointer"));
+window.addEventListener("blur",          () => { release("pointer"); release("key"); });
+
+function padKeys(){ return document.querySelectorAll("#padNotes [data-pc], #padPiano [data-pc]"); }
+function padDisabled(v){ padKeys().forEach(b => b.disabled = v); }
+function padClear(){ padKeys().forEach(b => b.classList.remove("hit-ok","hit-bad","show-right")); }
+
+/* ===================== 一次练习 ===================== */
+let S = null;
+let tick = null;
+let locked = false;   // 本题已判定，等待松手
+let held = null;      // { src, key, btn, right }
+let advance = null;   // 答错后进入下一题的定时器
+let geom = null;      // 本次练习的画布几何
+
+const randInt = n => Math.floor(Math.random()*n);
+const pick = a => a[randInt(a.length)];
+
+function nextQuestion(){
+  const clef = settings.hand;
+  let step, acc, guard = 0;
+  do {
+    step = pickStep(clef);
+    const chance = settings.acc === "off" ? 0 : settings.acc === "some" ? .34 : .66;
+    const opts = allowedAcc(step);
+    acc = (Math.random() < chance && opts.length > 1) ? pick(opts.filter(a => a !== 0)) : 0;
+    guard++;
+  } while (S.last && guard < 12 && S.last.step === step && S.last.acc === acc);
+
+  S.cur = { clef, step, acc, pc: stepPc(step, acc) };
+  S.last = S.cur;
+
+  $("clefName").textContent = clefLabel(clef);
+  $("staffHost").innerHTML = staffSVG(clef, [{ step, acc }], geom);
+  const v = $("verdict"); v.className = "verdict idle"; v.textContent = T("askNote");
+  $("stage").className = "card stage";
+  clearTimeout(advance); advance = null;
+  held = null; locked = false;
+  padClear(); padDisabled(false);
+}
+
+/* 按下琴键的那一刻：记分 + 符头换色 + 琴键换色，不等松手 */
+function press(pc, btn, src, key){
+  if(mode === "score") return pressScore(pc, btn, src, key);
+  if(!S || !S.running || !S.cur || locked) return;
+  locked = true;
+
+  const q = S.cur;
+  const right = pc === q.pc;
+  const v = $("verdict");
+  Sound.play(nearMidi(pc, midiOf(q.step, q.acc)));   // 按错了也响，听见错在哪儿
+
+  if(right){
+    S.ok++;
+    stats.correct[q.clef]++;          // 累计答对数，永远只加不减
+    $("stage").className = "card stage ok";
+    v.className = "verdict ok"; v.textContent = T("verdictOk", nameOf(q.step, q.acc));
+  } else {
+    $("stage").className = "card stage bad";
+    v.className = "verdict bad";
+    v.textContent = T("verdictBad", nameOf(q.step, q.acc), pcName(pc));
+    S.mistakes.push({ clef:q.clef, step:q.step, acc:q.acc, given:pc });
+    padKeys().forEach(b => { if(Number(b.dataset.pc) === q.pc) b.classList.add("show-right"); });
+  }
+
+  if(btn) btn.classList.add(right ? "hit-ok" : "hit-bad");
+  held = { src, key, btn, right };
+  updateHUD(); saveStats();
+}
+
+/* 松手才翻页：答对的立刻就走，一点停顿都没有；答错的留一下让你看清正确答案 */
+function release(src){
+  if(!held || held.src !== src || advance) return;
+  if(mode === "score"){
+    // 先把这次按键「用掉」。否则弹完最后一个音后 held 还挂着，
+    // 结果页上随便点一下（松开鼠标）就会被当成又弹完一遍，练习次数多记。
+    if(held.right){ held = null; chordStep(); return; }
+    advance = setTimeout(() => { if(mode === "score" && SC) drawScore(); }, 900);
+    return;
+  }
+  if(held.right){ nextQuestion(); return; }
+  advance = setTimeout(() => { if(S && S.running) nextQuestion(); }, 950);
+}
+
+function fmt(sec){
+  sec = Math.max(0, Math.round(sec));
+  return String(Math.floor(sec/60)).padStart(2,"0") + ":" + String(sec%60).padStart(2,"0");
+}
+function updateHUD(){
+  $("hudScore").textContent = S.ok;
+  $("hudTotal").textContent = stats.correct[settings.hand];
+}
+function setDrillHud(){
+  $("hudTimeK").textContent  = T("hudTime");
+  $("hudScoreK").textContent = T("hudCorrect");
+  $("hudTotalK").textContent = T("hudTotalHand", settings.hand);
+  $("hudScore").style.color = "var(--ok)";
+  $("hudTotal").style.color = "";
+  $("stopBtn").textContent = T("stopSession");
+}
+function startSession(){
+  const clef = settings.hand;
+  mode = "drill"; SC = null;
+  const ar = activeRange(clef);
+  geom = geomFor(clef, ar[0], ar[1]);
+
+  setDrillHud();
+  $("verdict").textContent = T("askNote");
+  S = { running:true, ok:0, mistakes:[], cur:null, last:null, t0:Date.now() };
+  updateHUD();
+  $("hudTime").textContent = "00:00";
+  go("play"); nextQuestion();
+
+  clearInterval(tick);
+  tick = setInterval(() => {
+    if(S && S.running) $("hudTime").textContent = fmt((Date.now() - S.t0)/1000);
+  }, 250);
+}
+function endSession(){
+  if(!S || !S.running) return;
+  S.running = false;
+  clearInterval(tick); clearTimeout(advance); advance = null; held = null;
+  padClear(); padDisabled(true);
+  showResult(Math.round((Date.now() - S.t0)/1000));
+}
+$("startBtn").onclick = startSession;
+// 练习页两种模式共用，结束按钮按当前模式分派
+function stopCurrent(){ if(mode === "score") quitScore(); else endSession(); }
+$("stopBtn").onclick = stopCurrent;
+
+/* ===================== 结果 ===================== */
+const row = (k,v) => '<div class="srow"><span>'+k+'</span><b>'+v+'</b></div>';
+let repaintResult = null;      // 切语言时用来把结果页按新语言再画一遍
+function showResult(elapsed){
+  repaintResult = () => showResult(elapsed);
+  $("rsLabel").textContent = T("correctThis");
+  $("rsAgain").textContent = T("again");
+  $("rsMenu").textContent = T("backMenu");
+  $("rsReview").classList.remove("hidden");
+  $("rsScore").style.color = "var(--ok)";
+  $("rsScore").textContent = S.ok;
+  $("rsRows").innerHTML =
+    row(T("rowRightTotal"), stats.correct.treble) +
+    row(T("rowLeftTotal"), stats.correct.bass) +
+    row(T("rowTime"), fmt(elapsed));
+  $("rsReview").disabled = S.mistakes.length === 0;
+  $("rsReview").textContent = S.mistakes.length ? T("reviewN", S.mistakes.length) : T("noMistakes");
+  go("result");
+}
+$("rsAgain").onclick = () => { if(mode === "score") startScore(SC.sc); else startSession(); };
+$("rsMenu").onclick = () => { if(mode === "score") openScores(); else go("menu"); };
+$("rsReview").onclick = () => { if(S && S.mistakes.length){ revIdx = 0; drawReview(); go("review"); } };
+
+/* ===================== 错题回顾 ===================== */
+let revIdx = 0;
+function drawReview(){
+  const m = S.mistakes[revIdx];
+  $("revClef").textContent = clefLabel(m.clef);
+  $("revStaff").innerHTML = staffSVG(m.clef, [{ step:m.step, acc:m.acc }], geomFor(m.clef, m.step, m.step));
+  $("revRight").textContent = nameOf(m.step, m.acc);
+  $("revWrong").textContent = pcName(m.given);
+  $("revCount").textContent = (revIdx+1) + " / " + S.mistakes.length;
+  $("revPrev").disabled = revIdx === 0;
+  $("revNext").disabled = revIdx === S.mistakes.length - 1;
+}
+$("revPrev").onclick = () => { if(revIdx > 0){ revIdx--; drawReview(); } };
+$("revNext").onclick = () => { if(revIdx < S.mistakes.length-1){ revIdx++; drawReview(); } };
+
+/* ===================== 累计答对 ===================== */
+function showStats(){
+  $("stTreble").textContent = stats.correct.treble;
+  $("stBass").textContent   = stats.correct.bass;
+  go("stats");
+}
+$("toStats").onclick = showStats;
+$("resetStats").onclick = () => {
+  if(confirm(T("resetAsk"))){
+    stats = { correct:{ treble:0, bass:0 } }; saveStats(); showStats();
+  }
+};
+
+/* ===================== 对照表：88 键钢琴 ↔ 大谱表，一整张 ===================== */
+// 组名跟着语言走，所以只存范围，画的时候再取名字
+const OCTAVE_BANDS = [
+  { oct:0, from:5,  to:6  }, { oct:1, from:7,  to:13 }, { oct:2, from:14, to:20 },
+  { oct:3, from:21, to:27 }, { oct:4, from:28, to:34 }, { oct:5, from:35, to:41 },
+  { oct:6, from:42, to:48 }, { oct:7, from:49, to:55 }, { oct:8, from:56, to:56 }
+];
+
+function chartSVG(){
+  const LO = 5, HI = 56;                    // A0 … C8，共 52 个白键
+  const W = 40, BW = 24, KH = 104, BH = 64; // 白键宽 / 黑键宽 / 白键高 / 黑键高
+  const KX = 150;                           // 键盘左边缘（左侧留给谱号与括线）
+  const KB_TOP = 52, KB_BOT = KB_TOP + KH;
+  const LETTER_Y = KB_BOT + 20, CONN_TOP = KB_BOT + 28;
+  const T_BOT = 408, B_BOT = 538;           // 高音 / 低音谱表的底线
+  const PX = 0.72;
+  const w = KX + (HI - LO + 1) * W + 34, h = 666;
+  const set = settings.naming === "solfege" ? SOLFEGE : LETTERS;
+
+  const xOf   = s => KX + (s - LO) * W + W/2;
+  const staffOf = s => s >= 28 ? { bot:T_BOT, bs:30 } : { bot:B_BOT, bs:18 };
+  const yIn   = (st, s) => st.bot - (s - st.bs) * HS;
+  const yOf   = s => yIn(staffOf(s), s);
+  const colorOf = s => "var(--n-" + "cdefgab"[stepLetter(s)] + ")";
+
+  const p = [];
+  p.push('<svg viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" role="img" '+
+         'style="width:'+Math.round(w*PX)+'px">');
+
+  // —— 每个白键到它在谱上位置的虚线 ——
+  for(let s = LO; s <= HI; s++)
+    p.push('<line x1="'+xOf(s)+'" y1="'+CONN_TOP+'" x2="'+xOf(s)+'" y2="'+yOf(s)+'" '+
+           'stroke="'+colorOf(s)+'" stroke-width="1.6" stroke-dasharray="2 4" opacity=".55"/>');
+
+  // —— 大谱表：两个谱表 + 左侧括线 + 谱号 ——
+  [T_BOT, B_BOT].forEach(bot => {
+    p.push('<g stroke="currentColor" stroke-width="1.6" stroke-linecap="square">');
+    for(let i=0;i<5;i++) p.push('<line x1="54" y1="'+(bot-i*SP)+'" x2="'+(w-20)+'" y2="'+(bot-i*SP)+'"/>');
+    p.push('</g>');
+  });
+  const braceTop = T_BOT - SP*4;
+  p.push('<g stroke="currentColor" stroke-width="3" stroke-linecap="square" fill="none">');
+  p.push('<line x1="34" y1="'+braceTop+'" x2="34" y2="'+B_BOT+'"/>');
+  p.push('<line x1="34" y1="'+braceTop+'" x2="48" y2="'+braceTop+'"/>');
+  p.push('<line x1="34" y1="'+B_BOT+'" x2="48" y2="'+B_BOT+'"/>');
+  p.push('</g>');
+  p.push(clefGlyph("treble", s => T_BOT - (s - 30) * HS, 58));
+  p.push(clefGlyph("bass",   s => B_BOT - (s - 18) * HS, 58));
+
+  // —— 加线与符头 ——
+  const lw = 14;
+  for(let s = LO; s <= HI; s++){
+    const st = staffOf(s), x = xOf(s), y = yOf(s);
+    const ledger = k => p.push('<line x1="'+(x-lw)+'" y1="'+yIn(st,k)+'" x2="'+(x+lw)+'" y2="'+yIn(st,k)+
+                               '" stroke="currentColor" stroke-width="1.8"/>');
+    if(s > st.bs + 8) for(let k = st.bs + 10; k <= s; k += 2) ledger(k);
+    if(s < st.bs)     for(let k = st.bs - 2;  k >= s; k -= 2) ledger(k);
+    const isC = stepLetter(s) === 0;
+    p.push('<g'+(isC ? ' style="color:var(--n-c)"' : '')+'>' + noteGlyphs(x, y, 0, 0.92) + '</g>');
+  }
+
+  // —— 键盘：先白键、再黑键 ——
+  for(let s = LO; s <= HI; s++)
+    p.push('<rect x="'+(KX + (s-LO)*W)+'" y="'+KB_TOP+'" width="'+W+'" height="'+KH+'" rx="3" '+
+           'fill="'+(s === 28 ? "var(--accent-soft)" : "var(--key)")+'" stroke="#9aa2ad" stroke-width="1"/>');
+  for(let s = LO; s < HI; s++){
+    const L = stepLetter(s);
+    if(L === 2 || L === 6) continue;                  // E、B 右边没有黑键
+    p.push('<rect x="'+(KX + (s-LO+1)*W - BW/2)+'" y="'+KB_TOP+'" width="'+BW+'" height="'+BH+'" '+
+           'rx="2" fill="var(--key-black)"/>');
+  }
+  // 中央 C 标记
+  const mcx = xOf(28);
+  p.push('<text x="'+mcx+'" y="'+(KB_BOT-12)+'" text-anchor="start" font-size="15" font-weight="700" '+
+         'fill="var(--accent)" font-family="inherit" transform="rotate(-90 '+mcx+' '+(KB_BOT-12)+')">'+T("middleC")+'</text>');
+
+  // —— 白键音名 ——
+  const fs = settings.naming === "solfege" ? 13 : 17;
+  for(let s = LO; s <= HI; s++){
+    const isC = stepLetter(s) === 0;
+    p.push('<text x="'+xOf(s)+'" y="'+LETTER_Y+'" text-anchor="middle" font-family="inherit" '+
+           'font-size="'+(isC ? fs-1 : fs)+'" font-weight="700" fill="'+colorOf(s)+'">'+
+           (isC ? set[0] + Math.floor(s/7) : set[stepLetter(s)])+'</text>');
+  }
+
+  // —— 顶上的分组 ——
+  const bandNames = T("octaveNames");
+  OCTAVE_BANDS.forEach(b => {
+    const x1 = KX + (b.from - LO)*W, x2 = KX + (b.to - LO + 1)*W, cx = (x1+x2)/2;
+    p.push('<line x1="'+x1+'" y1="6" x2="'+x1+'" y2="'+(KB_TOP-6)+'" stroke="currentColor" stroke-opacity=".2"/>');
+    const range = b.from === b.to ? sciName(b.from) : sciName(b.from)+"–"+sciName(b.to);
+    const wide = (x2 - x1) >= 150;
+    if(wide){
+      p.push('<text x="'+cx+'" y="20" text-anchor="middle" font-size="17" font-weight="600" fill="currentColor" font-family="inherit">'+bandNames[b.oct]+'</text>');
+      p.push('<text x="'+cx+'" y="38" text-anchor="middle" font-size="14" fill="currentColor" fill-opacity=".55" font-family="inherit">'+range+'</text>');
+    } else {
+      p.push('<text x="'+cx+'" y="30" text-anchor="middle" font-size="14" fill="currentColor" fill-opacity=".7" font-family="inherit">'+range+'</text>');
+    }
+  });
+  p.push('<line x1="'+(KX + (HI-LO+1)*W)+'" y1="6" x2="'+(KX + (HI-LO+1)*W)+'" y2="'+(KB_TOP-6)+'" stroke="currentColor" stroke-opacity=".2"/>');
+
+  p.push('</svg>');
+  return { svg:p.join(""), middleC:xOf(28) * PX };
+}
+
+$("toRef").onclick = () => {
+  go("ref");                                   // 先显示，才量得到容器宽度
+  const r = chartSVG(), host = $("refChart");
+  host.innerHTML = r.svg;
+  host.scrollLeft = Math.max(0, r.middleC - host.clientWidth/2);   // 打开时对准中央 C
+};
+
+/* ===================== 键盘 ===================== */
+document.addEventListener("keydown", e => {
+  if(e.metaKey || e.ctrlKey || e.altKey) return;
+  const k = e.key.toLowerCase();
+
+  if(screen === "menu" || screen === "result"){
+    if(k === " " || k === "enter"){
+      e.preventDefault();
+      if(screen === "result" && mode === "score") startScore(SC.sc); else startSession();
+    }
+    if(k === "escape" && screen === "result") { mode === "score" ? openScores() : go("menu"); }
+    return;
+  }
+  if(screen === "scores" || screen === "proof"){
+    if(k === "escape") go(screen === "proof" ? "scores" : "menu");
+    if(screen === "proof" && (k === " " || k === "enter")){ e.preventDefault(); $("proofStart").click(); }
+    return;
+  }
+  if(screen === "review"){
+    if(k === "arrowleft")  $("revPrev").click();
+    if(k === "arrowright") $("revNext").click();
+    if(k === "escape") go("result");
+    return;
+  }
+  if(screen === "stats" || screen === "ref"){ if(k === "escape") go("menu"); return; }
+
+  if(screen === "play"){
+    if(k === "escape"){ stopCurrent(); return; }
+    if(e.repeat) return;                       // 按住不放不重复判定
+    const map = settings.input === "piano" ? KEY_PIANO : KEY_LETTER;
+    if(k in map){
+      e.preventDefault();
+      let pc = map[k];
+      if(settings.input !== "piano" && e.shiftKey) pc = (pc + 1) % 12;
+      const btn = [...padKeys()].find(b => Number(b.dataset.pc) === pc && b.offsetParent);
+      press(pc, btn, "key", k);
+    }
+  }
+});
+document.addEventListener("keyup", e => {
+  if(held && held.src === "key" && held.key === e.key.toLowerCase()) release("key");
+});
+
+window.addEventListener("beforeunload", saveStats);
+
+/* Bravura 有 400 KB，先把它加载好再说，免得第一屏谱面闪一下豆腐块 */
+if(document.fonts && document.fonts.load){
+  Promise.all([document.fonts.load(MUSIC_FS + "px Bravura"), document.fonts.load("12px Pixel")])
+    .then(() => {
+      if(screen !== "play") return;
+      if(mode === "score" && SC) drawScore();
+      else if(S && S.cur)
+        $("staffHost").innerHTML = staffSVG(S.cur.clef, [{ step:S.cur.step, acc:S.cur.acc }], geom);
+    }).catch(() => {});
+}
+
+/* ===================== 琴谱练习 =====================
+   谱子文件里音名用科学音高记法（C4 = 中央 C），一个数组一小节。
+   只记音高顺序和小节线，不记节奏 —— 这里练的是认音，全部按全音符画。      */
+
+let scoreStats = Store.get("scorestats", {}) || {};
+function saveScoreStats(){ Store.set("scorestats", scoreStats); }
+
+const NOTE_RE = /^([A-Ga-g])([#s♯b♭]?)(-?\d)$/;
+function parseNote(str){
+  if(typeof str !== "string") return null;
+  const m = NOTE_RE.exec(str.trim());
+  if(!m) return null;
+  const li = LETTERS.indexOf(m[1].toUpperCase());
+  if(li < 0) return null;
+  const a = m[2];
+  const acc = (a === "#" || a === "s" || a === "♯") ? 1 : (a === "b" || a === "♭") ? -1 : 0;
+  return { step: (+m[3]) * 7 + li, acc };
+}
+
+/* 一首谱子可以同时有左右手：
+     "parts": { "treble": [[...],...], "bass": [[...],...] }
+   旧格式（只有 "measures" + "clef"）照样认，当成单手谱。 */
+function partsOf(raw){
+  const out = {};
+  if(raw && raw.parts && typeof raw.parts === "object"){
+    for(const h of ["treble","bass"])
+      if(Array.isArray(raw.parts[h]) && raw.parts[h].length) out[h] = raw.parts[h];
+  } else if(raw && Array.isArray(raw.measures)){
+    out[(raw.clef === "bass" || raw.hand === "bass") ? "bass" : "treble"] = raw.measures;
+  }
+  return out;
+}
+
+/* 一个「事件」= 同时按下的一组音。小节里的一项可以是
+     单音   "C4"
+     和弦   "C3+E3+G3"  或  ["C3","E3","G3"]
+   和弦在练习时从下往上一个一个弹。                    */
+function parseEvent(x){
+  const items = Array.isArray(x) ? x : (typeof x === "string" ? x.split("+") : []);
+  const notes = [], bad = [];
+  items.forEach(s => {
+    if(typeof s === "string" && !s.trim()) return;      // "C4+" 这种多打的加号不算错
+    const n = parseNote(s);
+    if(n) notes.push(n); else bad.push(String(s));
+  });
+  notes.sort((a, b) => midiOf(a.step, a.acc) - midiOf(b.step, b.acc) || a.step - b.step);
+  const seen = {}, uniq = [];
+  notes.forEach(n => { const k = n.step + ":" + n.acc; if(!seen[k]){ seen[k] = 1; uniq.push(n); } });
+  return { notes:uniq, bad };
+}
+
+function normalizeScore(raw, meta, hand){
+  const parts = partsOf(raw), hands = Object.keys(parts);
+  const clef = parts[hand] ? hand : (hands[0] || "treble");
+  const measures = [], bad = [];
+  let count = 0, chords = 0;
+  (parts[clef] || []).forEach((m, mi) => {
+    const out = [];
+    (Array.isArray(m) ? m : []).forEach((x, ni) => {
+      const ev = parseEvent(x);
+      ev.bad.forEach(x => bad.push(T("badNote", mi+1, ni+1, x)));
+      if(ev.notes.length){
+        out.push({ notes: ev.notes });
+        count += ev.notes.length;
+        if(ev.notes.length > 1) chords++;
+      }
+    });
+    measures.push(out);
+  });
+  return { id:meta.id, file:meta.file, title:raw.title || meta.id, composer:raw.composer || "",
+           source:raw.source || "", clef, hand:clef, hands, raw, meta, measures, bad, count, chords,
+           events: measures.reduce((n, m) => n + m.length, 0) };
+}
+
+/* 每首谱子的练习次数，左右手分开记：
+   { "<id>": { plays: 总次数, hands: { treble:{plays,bestWrong,lastWrong,last}, bass:{...} } } } */
+function scoreRecord(id){
+  let r = scoreStats[id];
+  if(!r) r = scoreStats[id] = { plays:0, hands:{} };
+  if(!r.hands){                                 // 1.1.0 的旧记录没分手，当时只有右手
+    r.hands = { treble: { plays:r.plays|0, bestWrong:r.bestWrong, lastWrong:r.lastWrong, last:r.last } };
+    delete r.bestWrong; delete r.lastWrong; delete r.last;
+  }
+  return r;
+}
+const handName  = h => T(h === "treble" ? "handRight" : "handLeft");
+const handShort = h => T(h === "treble" ? "handRightShort" : "handLeftShort");
+
+function flattenScore(sc){
+  const flat = [];
+  sc.measures.forEach((m, mi) => m.forEach(ev => flat.push({ notes:ev.notes, m:mi })));
+  return flat;
+}
+
+// 和弦横着比单音占地方，分行按「占几格」算而不是按个数
+function eventCost(ev){
+  return (ev.notes.length > 1 ? 1.8 : 1) + (ev.notes.some(n => n.acc) ? .4 : 0);
+}
+// 按小节分行，一行塞到 budget 格为止（小节不拆开）
+function paginate(sc, budget){
+  const lines = []; let cur = [], cost = 0, start = 0, idx = 0;
+  sc.measures.forEach((m, mi) => {
+    const c = m.reduce((s, ev) => s + eventCost(ev), 0);
+    if(cur.length && cost + c > budget){ lines.push({ measures:cur, start }); cur = []; cost = 0; start = idx; }
+    cur.push({ index:mi, events:m });
+    cost += c; idx += m.length;
+  });
+  if(cur.length) lines.push({ measures:cur, start });
+  return lines;
+}
+
+function scoreGeom(sc){
+  let lo = 1e9, hi = -1e9;
+  sc.measures.forEach(m => m.forEach(ev => ev.notes.forEach(n => {
+    if(n.step < lo) lo = n.step;
+    if(n.step > hi) hi = n.step;
+  })));
+  if(lo > hi){ lo = CLEF_BOTTOM[sc.clef]; hi = lo + 8; }
+  return geomFor(sc.clef, lo, hi);
+}
+
+/* 画一行：五线 + 谱号 + 音符 + 小节线。
+   current = 当前是第几个事件，opts.j = 当前和弦弹到第几个音（从下往上数）。 */
+function scoreLineSVG(sc, line, geom, current, opts){
+  opts = opts || {};
+  const curJ = opts.j | 0;
+  const bs = CLEF_BOTTOM[sc.clef];
+  const w = 560, top = geom.top, bottom = top + SP*4;
+
+  const evs = [];
+  line.measures.forEach(m => m.events.forEach(ev => evs.push(ev)));
+  const total = evs.length;
+  const maxStack = evs.reduce((n, ev) => Math.max(n, ev.notes.length), 1);
+  const h = geom.height + (opts.labels ? 10 + maxStack * 15 : 0);
+  const yOf = s => bottom - (s - bs) * HS;
+
+  // 每格多宽：先看最宽的那个事件要多少，再被这一行的可用宽度卡住；
+  // 实在挤不开就把符头整体缩小，不让它们叠在一起。
+  const x0 = 116;
+  const need  = evs.reduce((n, ev) => Math.max(n, eventWidth(chordLayout(ev.notes))), 34);
+  const avail = total ? (w - 24 - x0) / total : 40;
+  const gap   = Math.min(Math.max(52, need), Math.max(16, avail));
+  const noteScale = Math.min(1, gap / need);
+  const lw = Math.min(19, gap * 0.42);
+  const p = [];
+
+  p.push('<svg class="score" viewBox="0 0 '+w+' '+h+'" xmlns="http://www.w3.org/2000/svg" role="img">');
+
+  // 当前事件的高亮底色，画在最底下
+  if(current >= line.start && current < line.start + total)
+    p.push('<rect x="'+(x0 + (current - line.start) * gap)+'" y="'+(top - 26)+'" width="'+gap+
+           '" height="'+(bottom - top + 52)+'" rx="6" fill="var(--accent-soft)"/>');
+
+  const staffRight = x0 + total * gap;
+  p.push('<g stroke="currentColor" stroke-width="1.6" stroke-linecap="square">');
+  for(let i=0;i<5;i++) p.push('<line x1="16" y1="'+(top+i*SP)+'" x2="'+staffRight+'" y2="'+(top+i*SP)+'"/>');
+  p.push('</g>');
+
+  p.push(clefGlyph(sc.clef, yOf, 26));
+
+  let j = 0;
+  line.measures.forEach(meas => {
+    meas.events.forEach(ev => {
+      const x = x0 + (j + 0.5) * gap, gi = line.start + j;
+
+      // 弹过的事件整体淡掉；当前事件里，和弦从下往上弹，弹过的音淡掉、该弹的那个上色。
+      // i 从低到高，正好就是弹奏顺序。
+      const clsOf = opts.plain ? null : (i => {
+        if(gi < current) return " done";
+        if(gi > current) return "";
+        return i < curJ ? " done" : i === curJ ? " cur" : "";
+      });
+      eventGlyphs(p, ev.notes, x, yOf, bs, lw, noteScale, clsOf);
+
+      if(opts.labels)
+        // 高的音名列在上面，跟头顶上符头的上下关系对得上（不是弹奏顺序，校对看的是位置）
+        ev.notes.slice().reverse().forEach((nt, k) =>
+          p.push('<text x="'+x+'" y="'+(geom.height + 12 + k * 15)+'" text-anchor="middle" font-size="13" '+
+                 'font-family="inherit" fill="currentColor" fill-opacity=".6">'+nameOf(nt.step, nt.acc)+'</text>'));
+      j++;
+    });
+    const bx = x0 + j * gap;
+    p.push('<line x1="'+bx+'" y1="'+top+'" x2="'+bx+'" y2="'+bottom+'" stroke="currentColor" stroke-width="1.6"/>');
+  });
+
+  p.push('</svg>');
+  return p.join("");
+}
+
+/* ---------- 列表 ---------- */
+let scoreCache = [];
+function openScores(){
+  mode = "drill"; SC = null;
+  $("importMsg").classList.add("hidden");      // 上一次的导入提示别一直挂着
+  go("scores");
+  refreshScoreList();
+}
+function refreshScoreList(){
+  const host = $("scoreList");
+  host.innerHTML = '<p class="empty">' + T("scanning") + '</p>';
+  HOST.listScores().then(list => {
+    scoreCache = list;
+    if(!list.length){
+      host.innerHTML = '<p class="empty">' + T("emptyFolder") + '</p>';
+      return;
+    }
+    host.innerHTML = list.map(s => {
+      if(s.broken)
+        return '<div class="srow2 broken"><div class="t"><div class="n">⚠ '+esc(s.file)+'</div>'+
+               '<div class="d">'+esc(T("unreadable", s.error || T("wrongFormat")))+'</div></div></div>';
+      const rec = scoreStats[s.id] ? scoreRecord(s.id) : { plays:0, hands:{} };
+      const hands = s.hands && s.hands.length ? s.hands : ["treble"];
+      const handTxt = hands.map(h => handShort(h) + " " + T("nNotes", (s.noteCounts && s.noteCounts[h]) | 0)).join(" · ");
+      const playTxt = hands.map(h => handShort(h) + " " + T("nPlays", ((rec.hands[h] || {}).plays) | 0)).join("<br>");
+      return '<button class="srow2" data-file="'+esc(s.file)+'">'+
+             '<div class="t"><div class="n">'+esc(s.title)+'</div>'+
+             '<div class="d">'+(s.composer ? esc(s.composer)+' · ' : '')+T("nBars", s.measures)+' · '+handTxt+'</div></div>'+
+             '<div class="p"><b>'+(rec.plays|0)+'</b>'+playTxt+'</div></button>';
+    }).join("");
+  }).catch(e => { host.innerHTML = '<p class="empty">'+esc(T("scanError", String(e)))+'</p>'; });
+}
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;" })[c]);
+
+$("scoreList").addEventListener("click", e => {
+  const b = e.target.closest("[data-file]");
+  if(b) loadAndProof(b.dataset.file);
+});
+$("scRefresh").onclick = refreshScoreList;
+$("scOpenFolder").onclick = () => HOST.openScoresFolder();
+
+/* ---------- 校对 ---------- */
+let pending = null;
+function loadAndProof(file){
+  const meta = scoreCache.find(s => s.file === file) || { file, id:file.replace(/\.json$/i,"") };
+  HOST.readScore(file).then(raw => {
+    if(!raw){ alert(T("cannotRead", file)); return; }
+    // 默认练主菜单上选的那只手；这首没有那只手就用它有的
+    pending = normalizeScore(raw, meta, settings.hand);
+    renderProof(pending);
+    go("proof");
+  });
+}
+function switchProofHand(hand){
+  if(!pending || pending.hand === hand) return;
+  pending = normalizeScore(pending.raw, pending.meta, hand);
+  settings.hand = hand; saveSettings();
+  document.querySelectorAll("#optHand .opt").forEach(b =>
+    b.setAttribute("aria-pressed", String(b.dataset.v === hand)));
+  renderProof(pending);
+}
+function renderProof(sc){
+  const geom = scoreGeom(sc), lines = paginate(sc, 12);
+  const rec = scoreStats[sc.id] ? scoreRecord(sc.id) : { hands:{} };
+  const handBtns = ["treble","bass"].map(h => {
+    const has = sc.hands.includes(h);
+    return '<button class="opt" data-hand="'+h+'" aria-pressed="'+(sc.hand === h)+'"'+(has ? '' : ' disabled style="opacity:.4;cursor:default"')+'>'+
+           handName(h)+'<small>'+(has ? T(h === "treble" ? "clefTrebleShort" : "clefBassShort")+T("playedTimes", ((rec.hands[h]||{}).plays)|0) : T("notWritten"))+'</small></button>';
+  }).join("");
+  let html = '<div class="card"><p class="label">'+T("whichHand")+'</p><div class="seg c2" id="proofHands">'+handBtns+'</div></div>'+
+             '<div class="card" style="margin-top:10px"><div class="srow"><span>'+esc(sc.title)+
+             (sc.composer ? ' <span style="color:var(--muted)">· '+esc(sc.composer)+'</span>' : '')+
+             '</span><b>'+T("barsNotes", sc.measures.length, sc.count)+'</b></div>'+
+             (sc.source ? '<p class="hint" style="margin-top:6px">'+esc(sc.source)+'</p>' : '')+
+             (sc.chords ? '<p class="hint" style="margin-top:6px">'+T("chordNote", sc.chords)+'</p>' : '')+
+             (sc.bad.length ? '<p class="hint" style="color:var(--bad);margin-top:6px">⚠ '+
+                              sc.bad.map(esc).join('<br>')+'</p>' : '')+
+             '</div>';
+  lines.forEach(line => {
+    html += '<div class="card stage proofline" style="margin-top:10px">' +
+            scoreLineSVG(sc, line, geom, -1, { labels:true, plain:true }) +
+            '<p class="bars">' + line.measures.map(m =>
+                '<b>' + (m.index + 1) + '.</b> ' +
+                m.events.map(ev => ev.notes.map(n => nameOf(n.step, n.acc) + Math.floor(n.step / 7)).join("+"))
+                        .join(" ")
+              ).join(" &nbsp;|&nbsp; ") + '</p></div>';
+  });
+  $("proofBody").innerHTML = html;
+  $("proofStart").textContent = T("proofStartH", handName(sc.hand));
+}
+$("proofBody").addEventListener("click", e => {
+  const b = e.target.closest("[data-hand]");
+  if(b && !b.disabled) switchProofHand(b.dataset.hand);
+});
+$("proofStart").onclick = () => { if(pending) startScore(pending); };
+
+/* ---------- 练习 ---------- */
+function setScoreHud(){
+  $("hudTimeK").textContent  = T("hudProgress");
+  $("hudScoreK").textContent = T("hudBar");
+  $("hudTotalK").textContent = T("hudMistakes");
+  $("hudScore").style.color = "var(--ink)";
+  $("hudTotal").style.color = "var(--bad)";
+  $("stopBtn").textContent = T("leavePiece");
+  $("clefName").textContent = clefLabel(SC.sc.clef) + " · " + SC.sc.title;
+}
+function startScore(sc){
+  mode = "score";
+  SC = { sc, flat:flattenScore(sc), lines:paginate(sc, 12), geom:scoreGeom(sc),
+         i:0, j:0, wrong:0, t0:Date.now() };
+  if(!SC.flat.length){ alert(T("noNotes")); return openScores(); }
+  setScoreHud();
+
+  clearTimeout(advance); advance = null; held = null; locked = false;
+  padClear(); padDisabled(false);
+  go("play");
+  drawScore();
+}
+
+function lineIndexOf(i){
+  for(let k = SC.lines.length - 1; k >= 0; k--) if(i >= SC.lines[k].start) return k;
+  return 0;
+}
+
+// 和弦从下往上弹，跟真弹琴手指搭上去的顺序一致。notes 本来就是低→高存的
+function curNote(){
+  const ev = SC && SC.flat[SC.i];
+  return ev ? ev.notes[SC.j] : null;
+}
+
+function drawScore(){
+  const li = lineIndexOf(SC.i), ev = SC.flat[SC.i];
+  $("staffHost").innerHTML = scoreLineSVG(SC.sc, SC.lines[li], SC.geom, SC.i, { j:SC.j });
+  $("hudTime").textContent = (SC.i + 1) + " / " + SC.flat.length;
+  $("hudScore").textContent = (ev ? ev.m + 1 : SC.sc.measures.length) + " / " + SC.sc.measures.length;
+  $("hudTotal").textContent = SC.wrong;
+  $("stage").className = "card stage";
+  const v = $("verdict"); v.className = "verdict idle";
+  v.textContent = (ev && ev.notes.length > 1)
+    ? T("chordStep", ev.notes.length, SC.j + 1)
+    : T("playHighlighted");
+  clearTimeout(advance); advance = null;
+  held = null; locked = false;
+  padClear(); padDisabled(false);
+}
+
+function pressScore(pc, btn, src, key){
+  if(!SC || locked || SC.i >= SC.flat.length) return;
+  locked = true;
+  const n = curNote();
+  Sound.play(nearMidi(pc, midiOf(n.step, n.acc)));
+  const right = stepPc(n.step, n.acc) === pc;
+  const v = $("verdict");
+
+  if(right){
+    $("stage").className = "card stage ok";
+    v.className = "verdict ok"; v.textContent = T("verdictOk", nameOf(n.step, n.acc));
+  } else {
+    SC.wrong++;
+    $("hudTotal").textContent = SC.wrong;
+    $("stage").className = "card stage bad";
+    v.className = "verdict bad";
+    v.textContent = T("scoreBad", nameOf(n.step, n.acc), pcName(pc));
+    padKeys().forEach(b => { if(Number(b.dataset.pc) === stepPc(n.step, n.acc)) b.classList.add("show-right"); });
+  }
+  if(btn) btn.classList.add(right ? "hit-ok" : "hit-bad");
+  held = { src, key, btn, right };
+}
+
+// 和弦里还有没弹的音就往下挪一个，全弹完才算过了这个事件
+function chordStep(){
+  const ev = SC && SC.flat[SC.i];
+  if(!ev) return;
+  if(SC.j + 1 < ev.notes.length){ SC.j++; drawScore(); }
+  else scoreStep();
+}
+
+// 弹对了才往后走；弹错就停在这个音上重来，跟真弹琴一样
+function scoreStep(){
+  if(!SC || SC.i >= SC.flat.length) return;     // 已经弹完了，不能再结算一次
+  SC.i++; SC.j = 0;
+  if(SC.i >= SC.flat.length) finishScore();
+  else drawScore();
+}
+
+function finishScore(){
+  const rec = scoreRecord(SC.sc.id), hand = SC.sc.hand;
+  const st = rec.hands[hand] || (rec.hands[hand] = { plays:0 });
+  st.plays = (st.plays|0) + 1;
+  rec.plays = (rec.plays|0) + 1;
+  st.last = Date.now();
+  st.lastWrong = SC.wrong;
+  if(st.bestWrong === undefined || SC.wrong < st.bestWrong) st.bestWrong = SC.wrong;
+  saveScoreStats();
+
+  padDisabled(true);
+  renderScoreResult(st, Math.round((Date.now() - SC.t0) / 1000));
+  go("result");
+}
+
+// 单独拆出来：切语言的时候要能按新语言把这一页再画一遍，但不能重复记一次练习
+function renderScoreResult(st, sec){
+  repaintResult = () => renderScoreResult(st, sec);
+  $("rsLabel").textContent = T("pieceLabel", SC.sc.title, handName(SC.sc.hand));
+  $("rsScore").textContent = st.plays;
+  $("rsScore").style.color = "var(--ok)";
+  $("rsRows").innerHTML =
+    row(T("rowWrongThis"), T("nTimesWrong", SC.wrong)) +
+    row(T("rowBestWrong"), T("nTimesWrong", st.bestWrong)) +
+    row(T("rowTotalNotes"), SC.sc.count + (SC.sc.chords ? T("withChords", SC.sc.chords) : "")) +
+    row(T("rowTime"), fmt(sec));
+  $("rsReview").classList.add("hidden");
+  $("rsAgain").textContent = T("playItAgain");
+  $("rsMenu").textContent = T("backToList");
+}
+
+function quitScore(){
+  padDisabled(true);
+  clearTimeout(advance); advance = null; held = null;
+  openScores();
+}
+
+/* ===================== 导入：MIDI / 现成的谱子 =====================
+   .mid 在界面这边就地转好（midi.js），转完把 JSON 交给主进程写进
+   scores 文件夹 —— 文件名由主进程清洗决定，这边只给个建议名。
+   存进去就是库里的一首，以后随时能练，不用每次重新拖。            */
+
+function importReport(items){
+  const host = $("importMsg");
+  const okn = items.filter(r => !r.err).length;
+  host.innerHTML = items.map(r => r.err
+    ? '<div class="ln err">' + T("importedBad", esc(r.name), esc(r.err)) + '</div>'
+    : '<div class="ln">' + T("importedOk", esc(r.title), esc(r.detail)) + '</div>'
+  ).join("") + (okn ? '<div class="ln note">' + T("importNote") + '</div>' : "");
+  host.classList.remove("hidden");
+}
+
+async function importFile(f){
+  const base = f.name.replace(/\.[^.]+$/, "").trim() || T("importedPiece");
+  let score, title, detail;
+
+  if(/\.json$/i.test(f.name)){
+    let txt = await f.text();
+    if(txt.charCodeAt(0) === 0xFEFF) txt = txt.slice(1);          // 去掉 BOM
+    score = JSON.parse(txt);
+    const ps = partsOf(score);
+    if(!Object.keys(ps).length) throw new Error(T("notAScore"));
+    title  = (score && score.title) || base;
+    detail = Object.keys(ps).map(h => handName(h) + " " + T("nBars", ps[h].length)).join(" · ");
+  } else {
+    const out = MidiImport.convert(MidiImport.parse(await f.arrayBuffer()),
+                                   { title:base, file:f.name });
+    score = out.score; title = out.title;
+    detail = ["treble","bass"].filter(h => out.stat[h])
+      .map(h => handName(h) + " " + T("barsNotes", out.stat[h].bars, out.stat[h].notes))
+      .join(" · ");
+  }
+
+  const r = await HOST.saveScore(title, score);
+  // 主进程回的是错误代号，文案在这边查，这样它不用关心界面是哪种语言
+  if(!r || !r.ok) throw new Error((r && r.code && T(r.code)) || (r && r.error) || T("cantSave"));
+  return { name:f.name, title, detail, file:r.file };
+}
+
+async function importFiles(fileList){
+  const all = [...fileList];
+  const files = all.filter(f => /\.(midi?|json)$/i.test(f.name));
+  const out = [];
+  for(const f of files){
+    try { out.push(await importFile(f)); }
+    catch(err){ out.push({ name:f.name, err:(err && err.message) || String(err) }); }
+  }
+  if(all.length > files.length)
+    out.push({ name:T("otherFiles", all.length - files.length), err:T("skipped") });
+  if(!out.length) return;
+
+  // 练到一半别把人踢出去，谱子照样存进去了，退出来就能看见
+  if(screen === "play") return;
+  if(screen === "scores") refreshScoreList(); else openScores();
+  importReport(out);
+}
+
+applyLang();      // 放在最后：它会重画所有依赖语言的东西
+
+/* ===================== 桌面版专属 ===================== */
+if(HOST){
+  $("footNote").dataset.i18n = "footDesktop";      // 换语言时也会跟着变
+  $("footNote").innerHTML = T("footDesktop");
+
+  const btn = $("toScores");
+  btn.classList.remove("hidden");
+  btn.onclick = openScores;
+
+  const refresh = () => HOST.listScores().then(list => {
+    scoreCache = list;
+    scoresBtn = { n:list.length, bad:list.filter(s => s.broken).length, scanned:true };
+    paintScoresBtn();
+    if(screen === "scores") refreshScoreList();
+  }).catch(() => { scoresBtn.scanned = false; paintScoresBtn(); });
+
+  refresh();
+  window.addEventListener("focus", refresh);   // 丢完谱子切回来自动重扫，不用重启
+
+  // —— 拖文件进窗口就导入 ——
+  const hasFiles = e => !!e.dataTransfer && [].indexOf.call(e.dataTransfer.types || [], "Files") >= 0;
+  const mask = on => $("dropMask").classList.toggle("hidden", !on);
+  let depth = 0;                               // 进出子元素也会触发，靠计数判断真的离开了没
+
+  window.addEventListener("dragenter", e => {
+    if(!hasFiles(e)) return;
+    e.preventDefault();
+    if(++depth === 1) mask(true);
+  });
+  window.addEventListener("dragover", e => {
+    if(!hasFiles(e)) return;
+    e.preventDefault();
+    e.dataTransfer.dropEffect = "copy";
+  });
+  window.addEventListener("dragleave", e => {
+    if(!hasFiles(e)) return;
+    if(--depth <= 0){ depth = 0; mask(false); }
+  });
+  window.addEventListener("drop", e => {
+    if(!hasFiles(e)) return;
+    e.preventDefault();
+    depth = 0; mask(false);
+    importFiles(e.dataTransfer.files);
+  });
+
+  $("scImport").onclick = () => $("scFile").click();
+  // 先把 FileList 拷成数组再清空输入框，否则同一个文件第二次选不动
+  $("scFile").onchange = e => { const f = [...e.target.files]; e.target.value = ""; importFiles(f); };
+}
+</script>
+</body>
+</html>

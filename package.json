@@ -1,0 +1,47 @@
+{
+  "name": "sight-reading-trainer",
+  "version": "1.0.0",
+  "description": "Sight Reading - grand staff note-reading practice (English / 中文)",
+  "main": "main.js",
+  "license": "MIT",
+  "scripts": {
+    "start": "electron .",
+    "dist": "electron-builder --win"
+  },
+  "devDependencies": {
+    "electron": "^38.0.0",
+    "electron-builder": "^25.1.8"
+  },
+  "build": {
+    "appId": "com.sightreading.trainer",
+    "productName": "Sight Reading",
+    "electronVersion": "38.8.6",
+    "asar": true,
+    "files": [
+      "main.js",
+      "preload.js",
+      "renderer/**/*",
+      "samples/**/*",
+      "build/icon.ico"
+    ],
+    "directories": {
+      "output": "dist",
+      "buildResources": "build"
+    },
+    "win": {
+      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "icon": "build/icon.ico",
+      "artifactName": "Sight-Reading-Setup-${version}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "createStartMenuShortcut": true,
+      "shortcutName": "Sight Reading",
+      "installerLanguages": ["en_US", "zh_CN"],
+      "deleteAppDataOnUninstall": false
+    }
+  }
+}
