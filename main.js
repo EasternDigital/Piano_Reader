@@ -5,7 +5,7 @@ const path = require("path");
 const fs = require("fs");
 
 /* ===================== 用户数据目录 =====================
-   一切用户数据都放在「文档\识谱练习\」下面，不放在安装目录里：
+   一切用户数据都放在「文档\Sight Reading\」下面，不放在安装目录里：
    卸载重装不丢数据，也方便你自己备份和往 scores 里丢谱子。        */
 const DIRS = {};
 
@@ -37,11 +37,16 @@ function initDirs(){
   //
   // 升级规则：samples.json 里记着「上次我们写进去的那份长什么样」的哈希。
   // 盘上那份还是那个哈希 = 用户没动过，可以换成新版；对不上就是用户自己改过，一个字都不碰。
+  //
+  // 语言只认第一次：samples.json 里的 _lang 记下当初装的是哪套，之后换界面语言
+  // 也不再补装另一套。否则切一次语言，库里就会多出同一首曲子的另一个语言版本。
   try {
-    const samples = path.join(__dirname, "samples", pickLang());
-    if(!fs.existsSync(samples)) return;
     const stamp = readJSON("samples", {}) || {};
     let dirty = false;
+    if(!stamp._lang){ stamp._lang = pickLang(); dirty = true; }
+
+    const samples = path.join(__dirname, "samples", stamp._lang);
+    if(!fs.existsSync(samples)){ if(dirty) writeJSON("samples", stamp); return; }
 
     for(const f of fs.readdirSync(samples)){
       const src = path.join(samples, f), dst = path.join(DIRS.scores, f);

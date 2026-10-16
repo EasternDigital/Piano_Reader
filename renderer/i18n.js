@@ -51,7 +51,7 @@ zh: {
   playPieceN:     (n, bad) => "🎼 练 琴 谱（" + n + " 首" + (bad ? "，" + bad + " 首有问题" : "") + "）",
   playPieceEmpty: "🎼 练 琴 谱（还没有谱子）",
   footBrowser: "不限时，练到按「结束」为止 · <kbd>空格</kbd> 开始<br>成绩保存在本机浏览器中",
-  footDesktop: "不限时，练到按「结束」为止 · <kbd>空格</kbd> 开始<br>数据保存在「文档\\识谱练习\\」",
+  footDesktop: "不限时，练到按「结束」为止 · <kbd>空格</kbd> 开始<br>数据保存在「文档\\Sight Reading\\」",
   groupSub:    (lo, hi, n) => lo + "–" + hi + "（" + n + " 个音）",
   groupHintPick: (lo, hi, n) =>
     "只练 " + lo + "–" + hi + " 这 " + n + " 个音，组内平均出题。练熟了切回「全音域」跑一遍确认。",
@@ -111,7 +111,7 @@ zh: {
   rescan:      "🔄 重新扫描",
   scoresFoot:
     "把 .mid 文件<b>直接拖进窗口</b>就会自动转成谱子存进库里，以后一直都能练<br>" +
-    "现成的 .json 谱子拖进来、或者丢进「文档\\识谱练习\\scores\\」也行",
+    "现成的 .json 谱子拖进来、或者丢进「文档\\Sight Reading\\scores\\」也行",
   scanning:    "正在扫描…",
   emptyFolder: "scores 文件夹还是空的。<br>把谱子文件丢进去，回来点「重新扫描」。",
   unreadable:  e => "这个文件读不出来：" + e,

@@ -8,6 +8,30 @@ Import your own MIDI files and practise them. English / 中文.
 可以把自己的 MIDI 拖进来转成谱子练。中英文双语。
 
 ![Windows](https://img.shields.io/badge/Windows-x64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
+[![Download](https://img.shields.io/github/v/release/EasternDigital/sight-reading?label=download)](../../releases/latest)
+
+<p align="center">
+  <img src="docs/practice.png" width="620" alt="A note on the treble staff with the on-screen keyboard below it">
+</p>
+
+<table>
+<tr>
+<td width="50%"><img src="docs/score-chords.png" alt="Playing a chord from a score, bottom note already played"></td>
+<td width="50%"><img src="docs/menu-en.png" alt="The main menu"></td>
+</tr>
+<tr>
+<td align="center"><em>Playing a chord from a score — bottom to top, one note at a time</em></td>
+<td align="center"><em>Everything is one screen of settings</em></td>
+</tr>
+<tr>
+<td width="50%"><img src="docs/check.png" alt="The Check page listing every note the program read"></td>
+<td width="50%"><img src="docs/menu-zh.png" alt="同一个界面的中文版"></td>
+</tr>
+<tr>
+<td align="center"><em>Check an imported piece before you play it</em></td>
+<td align="center"><em>中文界面 — 顶栏一键切换</em></td>
+</tr>
+</table>
 
 ---
 
