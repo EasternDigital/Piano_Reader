@@ -8,7 +8,7 @@ Import your own MIDI files and practise them. English / 中文.
 可以把自己的 MIDI 拖进来转成谱子练。中英文双语。
 
 ![Windows](https://img.shields.io/badge/Windows-x64-blue) ![License](https://img.shields.io/badge/license-MIT-green)
-[![Download](https://img.shields.io/github/v/release/EasternDigital/sight-reading?label=download)](../../releases/latest)
+[![Download](https://img.shields.io/github/v/release/EasternDigital/Piano_Reader?label=download)](../../releases/latest)
 
 <p align="center">
   <img src="docs/practice.png" width="620" alt="A note on the treble staff with the on-screen keyboard below it">
