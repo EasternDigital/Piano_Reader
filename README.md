@@ -144,7 +144,7 @@ renderer/index.html    整个界面（HTML + CSS + JS）
 renderer/i18n.js       中英文文案表
 renderer/midi.js       MIDI 解析与转谱子
 renderer/fonts/        Bravura（制谱字体）、Silkscreen（像素字体）
-samples/cn|en/         内置示例谱子，首次运行按语言复制一份过去
+samples/zh|en/         内置示例谱子，只在首次运行时按语言装一套
 build/icon.ico         程序图标
 ```
 
