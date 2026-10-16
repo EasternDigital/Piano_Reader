@@ -200,4 +200,9 @@ Licence texts are in `renderer/fonts/`. 授权原文在 `renderer/fonts/` 里。
 
 ## Licence
 
-MIT — see [LICENSE](LICENSE).
+The code is MIT — see [LICENSE](LICENSE). The bundled fonts and the Electron
+runtime are third-party works under their own licences; see
+[THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md).
+
+代码是 MIT，见 [LICENSE](LICENSE)。随程序分发的字体和 Electron 运行时属于第三方，
+各走各的协议，见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)。
